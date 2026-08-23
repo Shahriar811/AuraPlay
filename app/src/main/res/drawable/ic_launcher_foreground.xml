@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Dark blue circle -->
+    <path
+        android:pathData="M 54,54 m -50,0 a 50,50 0 1,0 100,0 a 50,50 0 1,0 -100,0"
+        android:fillColor="#1E3A8A"/>
+
+    <!-- Orange play button triangle -->
+    <path
+        android:pathData="M 40,30 L 80,54 L 40,78 Z"
+        android:fillColor="#F97316"/>
+
+    <!-- Musical notes -->
+    <path
+        android:pathData="M 50,40 Q 50,35 53,35 Q 56,35 56,40 L 56,60 Q 56,65 53,65 Q 50,65 50,60 L 50,40 Z
+                         M 60,45 Q 60,40 63,40 Q 66,40 66,45 L 66,65 Q 66,70 63,70 Q 60,70 60,65 L 60,45 Z"
+        android:fillColor="#FFFFFF"/>
+</vector>
