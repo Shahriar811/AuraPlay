@@ -174,10 +174,16 @@ class MainViewModel(
         _sortOrder.value = order
     }
 
-    fun loadLyrics(filePath: String) {
+    private val _isLyricsLoading = MutableStateFlow(false)
+    val isLyricsLoading = _isLyricsLoading.asStateFlow()
+
+    fun loadLyrics(song: Song?, forceRefresh: Boolean = false) {
+        if (song == null) return
         viewModelScope.launch {
-            val lyrics = LyricsManager.loadLyricsForSong(filePath)
+            _isLyricsLoading.value = true
+            val lyrics = LyricsManager.getLyricsForSong(song, playlistDao, forceRefresh)
             _currentLyrics.value = lyrics
+            _isLyricsLoading.value = false
         }
     }
 

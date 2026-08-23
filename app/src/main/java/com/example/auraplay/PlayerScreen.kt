@@ -4,6 +4,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +27,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -35,8 +39,12 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.auraplay.LyricsManager
 import com.example.auraplay.MainViewModel
+import com.example.auraplay.SongLyrics
+import com.example.auraplay.data.Song
 import com.example.auraplay.service.PlayerState
 import com.example.auraplay.service.SleepTimerState
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,6 +61,7 @@ fun PlayerScreen(
     onToggleRepeatMode: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val songId = playerState.currentSong?.id
     val songFromDb by viewModel.getSongById(songId ?: 0L).collectAsState(initial = null)
     val song = songFromDb ?: playerState.currentSong
@@ -61,6 +70,7 @@ fun PlayerScreen(
     val isPureBlack by viewModel.pureBlack.collectAsState()
     val sleepTimerState by viewModel.sleepTimerState.collectAsState()
     val currentLyrics by viewModel.currentLyrics.collectAsState()
+    val isLyricsLoading by viewModel.isLyricsLoading.collectAsState()
 
     // Dynamic color extraction from active album art
     val extractedColors = rememberDominantColors(context, song?.albumArtUri)
@@ -75,10 +85,13 @@ fun PlayerScreen(
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var showQueueSheet by remember { mutableStateOf(false) }
 
+    // Gesture feedback state (e.g. "+10s", "-10s")
+    var gestureFeedbackText by remember { mutableStateOf<String?>(null) }
+
     // Load lyrics when current song changes
-    LaunchedEffect(song?.data) {
-        song?.data?.let { path ->
-            viewModel.loadLyrics(path)
+    LaunchedEffect(song?.id) {
+        if (song != null) {
+            viewModel.loadLyrics(song, forceRefresh = false)
         }
     }
 
@@ -223,7 +236,7 @@ fun PlayerScreen(
             song?.let { s ->
                 val hasAlbumArt = !s.albumArtUri.isNullOrBlank() && s.albumArtUri != "null"
 
-                // Center Stage: Album Art or Karaoke Lyrics
+                // Center Stage: Album Art with Gestures OR Spotify-Style Karaoke Lyrics
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -232,15 +245,18 @@ fun PlayerScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     if (showLyrics) {
-                        // Lyrics View
-                        LyricsDisplayView(
+                        // Spotify-Style Lyrics View
+                        SpotifyLyricsView(
                             lyrics = currentLyrics,
                             currentPosition = playerState.currentPosition,
+                            isLoading = isLyricsLoading,
                             accentColor = glassColors.accentColor,
+                            onSeek = onSeek,
+                            onRefreshLyrics = { viewModel.loadLyrics(s, forceRefresh = true) },
                             onToggleLyrics = { showLyrics = false }
                         )
                     } else {
-                        // Glowing Breathing Album Art
+                        // Glowing Breathing Album Art with Swipe and Double-Tap Gestures
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(0.92f)
@@ -267,7 +283,7 @@ fun PlayerScreen(
                                 )
                             }
 
-                            // Frosted Glass Album Card
+                            // Frosted Glass Album Card with Gesture Handling
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -275,7 +291,43 @@ fun PlayerScreen(
                                         shape = RoundedCornerShape(32.dp),
                                         backgroundColor = glassColors.backgroundColor,
                                         borderColor = glassColors.borderColor
-                                    ),
+                                    )
+                                    .pointerInput(Unit) {
+                                        var totalDragX = 0f
+                                        detectHorizontalDragGestures(
+                                            onDragEnd = {
+                                                if (totalDragX > 120f) {
+                                                    onPrevious()
+                                                } else if (totalDragX < -120f) {
+                                                    onNext()
+                                                }
+                                                totalDragX = 0f
+                                            },
+                                            onHorizontalDrag = { _, dragAmount ->
+                                                totalDragX += dragAmount
+                                            }
+                                        )
+                                    }
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onDoubleTap = { offset ->
+                                                val isRightSide = offset.x > (size.width / 2)
+                                                if (isRightSide) {
+                                                    val newPos = (playerState.currentPosition + 10_000L).coerceAtMost(playerState.totalDuration)
+                                                    onSeek(newPos.toFloat())
+                                                    gestureFeedbackText = "+10s"
+                                                } else {
+                                                    val newPos = (playerState.currentPosition - 10_000L).coerceAtLeast(0L)
+                                                    onSeek(newPos.toFloat())
+                                                    gestureFeedbackText = "-10s"
+                                                }
+                                                coroutineScope.launch {
+                                                    delay(900)
+                                                    gestureFeedbackText = null
+                                                }
+                                            }
+                                        )
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (!hasAlbumArt) {
@@ -305,12 +357,30 @@ fun PlayerScreen(
                                         contentScale = ContentScale.Crop
                                     )
                                 }
+
+                                // Double tap feedback overlay
+                                gestureFeedbackText?.let { feedback ->
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(Color.Black.copy(alpha = 0.7f))
+                                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = feedback,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 20.sp,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
-                // Song Title & Artist Glass Deck
+                // Song Title & Artist Glass Deck with Lyrics Switcher
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -345,12 +415,12 @@ fun PlayerScreen(
                             )
                         }
 
-                        // Lyrics Toggle Button
+                        // Lyrics Toggle Button with Pulsing Badge
                         IconButton(onClick = { showLyrics = !showLyrics }) {
                             Icon(
                                 imageVector = if (showLyrics) Icons.Rounded.Album else Icons.Rounded.Lyrics,
                                 contentDescription = "Toggle Lyrics",
-                                tint = if (showLyrics) glassColors.accentColor else glassColors.subTextColor
+                                tint = if (showLyrics) glassColors.accentColor else glassColors.textColor
                             )
                         }
                     }
@@ -516,7 +586,7 @@ fun PlayerScreen(
                 ) {
                     TextButton(onClick = { showQueueSheet = true }) {
                         Icon(
-                            Icons.Rounded.QueueMusic,
+                            Icons.AutoMirrored.Rounded.QueueMusic,
                             contentDescription = "Queue",
                             tint = glassColors.accentColor,
                             modifier = Modifier.size(18.dp)
@@ -535,19 +605,25 @@ fun PlayerScreen(
     }
 }
 
+// 🎤 Spotify-Style Interactive Live Karaoke Lyrics Component with Tap-to-Seek
 @Composable
-fun LyricsDisplayView(
-    lyrics: com.example.auraplay.SongLyrics,
+fun SpotifyLyricsView(
+    lyrics: SongLyrics,
     currentPosition: Long,
+    isLoading: Boolean,
     accentColor: Color,
+    onSeek: (Float) -> Unit,
+    onRefreshLyrics: () -> Unit,
     onToggleLyrics: () -> Unit
 ) {
-    val glassColors = glassCardColors()
+    val glassColors = glassCardColors(customAccent = accentColor)
     val listState = rememberLazyListState()
+
     val activeIndex = remember(lyrics, currentPosition) {
         LyricsManager.getActiveLyricIndex(lyrics.lines, currentPosition)
     }
 
+    // Auto-scroll with gentle spring
     LaunchedEffect(activeIndex) {
         if (activeIndex >= 0 && activeIndex < lyrics.lines.size) {
             listState.animateScrollToItem((activeIndex - 2).coerceAtLeast(0))
@@ -564,61 +640,160 @@ fun LyricsDisplayView(
             )
             .padding(16.dp)
     ) {
-        if (lyrics.lines.isEmpty() && lyrics.plainText.isBlank()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Rounded.Lyrics,
-                        contentDescription = null,
-                        tint = glassColors.subTextColor,
-                        modifier = Modifier.size(48.dp)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "No lyrics found (.lrc file)",
-                        color = glassColors.subTextColor,
-                        fontSize = 14.sp
-                    )
-                }
-            }
-        } else if (lyrics.isSynced) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(vertical = 40.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Lyrics Header Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                itemsIndexed(lyrics.lines) { index, line ->
-                    val isActive = index == activeIndex
-                    Text(
-                        text = line.text,
-                        fontSize = if (isActive) 19.sp else 15.sp,
-                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isActive) accentColor else glassColors.textColor.copy(alpha = 0.45f),
-                        textAlign = TextAlign.Center,
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .graphicsLayer {
-                                scaleX = if (isActive) 1.05f else 1f
-                                scaleY = if (isActive) 1.05f else 1f
-                            }
-                    )
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(accentColor.copy(alpha = 0.15f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        val sourceText = when (lyrics.source) {
+                            "LOCAL" -> "📁 Local .lrc"
+                            "LRCLIB" -> "✨ Synced • LRCLIB"
+                            else -> if (lyrics.isSynced) "✨ Synced" else "📝 Plain Lyrics"
+                        }
+                        Text(
+                            text = sourceText,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = accentColor
+                        )
+                    }
+                }
+
+                Row {
+                    IconButton(
+                        onClick = onRefreshLyrics,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Sync,
+                            contentDescription = "Refresh Lyrics",
+                            tint = glassColors.subTextColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(
+                        onClick = onToggleLyrics,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Close Lyrics",
+                            tint = glassColors.subTextColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp)
-            ) {
-                item {
-                    Text(
-                        text = lyrics.plainText,
-                        color = glassColors.textColor,
-                        fontSize = 15.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+
+            if (isLoading) {
+                // Loading shimmer state
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(
+                            color = accentColor,
+                            modifier = Modifier.size(36.dp),
+                            strokeWidth = 3.dp
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "Searching online synced lyrics...",
+                            color = glassColors.subTextColor,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            } else if (lyrics.lines.isEmpty() && lyrics.plainText.isBlank()) {
+                // Empty state with retry action
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Rounded.Lyrics,
+                            contentDescription = null,
+                            tint = glassColors.subTextColor,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "No lyrics found",
+                            fontWeight = FontWeight.Bold,
+                            color = glassColors.textColor,
+                            fontSize = 15.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "Tap below to retry online search",
+                            color = glassColors.subTextColor,
+                            fontSize = 12.sp
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = onRefreshLyrics,
+                            colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Rounded.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Search Online Lyrics", fontSize = 13.sp)
+                        }
+                    }
+                }
+            } else if (lyrics.isSynced) {
+                // Spotify-Style Karaoke Scrolling Lyrics (Interactive Tap-to-Seek)
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(vertical = 50.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    itemsIndexed(lyrics.lines) { index, line ->
+                        val isActive = index == activeIndex
+                        Text(
+                            text = line.text,
+                            fontSize = if (isActive) 21.sp else 16.sp,
+                            fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
+                            color = if (isActive) Color.White else glassColors.textColor.copy(alpha = 0.35f),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { onSeek(line.timeMs.toFloat()) }
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                                .graphicsLayer {
+                                    scaleX = if (isActive) 1.08f else 1f
+                                    scaleY = if (isActive) 1.08f else 1f
+                                }
+                        )
+                    }
+                }
+            } else {
+                // Plain text lyrics
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp)
+                ) {
+                    item {
+                        Text(
+                            text = lyrics.plainText,
+                            color = glassColors.textColor,
+                            fontSize = 15.sp,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 26.sp,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
         }
@@ -878,7 +1053,7 @@ fun SleepTimerDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            Icons.Rounded.QueueMusic,
+                            Icons.AutoMirrored.Rounded.QueueMusic,
                             contentDescription = null,
                             tint = glassColors.accentColor
                         )
@@ -978,14 +1153,9 @@ fun PlayerProgressSlider(
     }
 }
 
-fun formatTime(millis: Long): String {
-    val safeMillis = maxOf(0L, millis)
-    val hours = TimeUnit.MILLISECONDS.toHours(safeMillis)
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(safeMillis) % 60
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(safeMillis) % 60
-    return if (hours > 0) {
-        String.format("%02d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format("%02d:%02d", minutes, seconds)
-    }
+private fun formatTime(millis: Long): String {
+    val totalSeconds = (millis / 1000).coerceAtLeast(0)
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format("%02d:%02d", minutes, seconds)
 }

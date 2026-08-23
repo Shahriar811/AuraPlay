@@ -89,6 +89,16 @@ interface PlaylistDao {
     @Query("SELECT * FROM Song WHERE folderPath = :folderPath ORDER BY title ASC")
     fun getSongsByFolder(folderPath: String): Flow<List<Song>>
 
+    // Lyrics operations
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLyrics(lyrics: SongLyricsEntity)
+
+    @Query("SELECT * FROM SongLyricsEntity WHERE songId = :songId")
+    suspend fun getLyricsForSong(songId: Long): SongLyricsEntity?
+
+    @Query("DELETE FROM SongLyricsEntity WHERE songId = :songId")
+    suspend fun deleteLyricsForSong(songId: Long)
+
     // Grouping queries
     @Query("SELECT album, albumId, artist, albumArtUri, COUNT(*) as songCount FROM Song WHERE album != '' GROUP BY album ORDER BY album ASC")
     fun getAllAlbums(): Flow<List<AlbumItem>>
