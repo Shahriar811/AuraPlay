@@ -82,6 +82,9 @@ dependencies {
     // --- ADD THIS LINE FOR PREFERENCES DATASTORE ---
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
+    // Palette for dynamic album art color extraction
+    implementation("androidx.palette:palette-ktx:1.0.0")
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -10,14 +10,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.auraplay.data.Playlist
-import com.example.auraplay.data.PlaylistDao
-import com.example.auraplay.data.PlaylistSongCrossRef
-import com.example.auraplay.data.Song
+import com.example.auraplay.data.*
+import com.example.auraplay.service.MusicService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import java.io.File
 
 enum class SortOrder {
     TITLE, ARTIST, DATE_ADDED
@@ -26,7 +24,7 @@ enum class SortOrder {
 class MainViewModel(
     application: Application,
     private val playlistDao: PlaylistDao,
-    private val settingsDataStore: SettingsDataStore // 1. Add SettingsDataStore
+    private val settingsDataStore: SettingsDataStore
 ) : AndroidViewModel(application) {
 
     private val _deletePendingIntent = MutableSharedFlow<PendingIntent>()
@@ -40,26 +38,42 @@ class MainViewModel(
     private val _sortOrder = MutableStateFlow(SortOrder.DATE_ADDED)
     val sortOrder = _sortOrder.asStateFlow()
 
-    // 2. Remove the old MutableStateFlow for darkTheme
-    // private val _darkTheme = MutableStateFlow(true)
-    // val darkTheme = _darkTheme.asStateFlow()
+    private val _currentLyrics = MutableStateFlow(SongLyrics())
+    val currentLyrics = _currentLyrics.asStateFlow()
 
-    // 2. Read the theme directly from DataStore and expose it as a StateFlow
+    // Settings Flows
     val darkTheme: StateFlow<Boolean> = settingsDataStore.darkThemeFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = true // Default to true while DataStore is loading
-        )
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val accentTheme: StateFlow<String> = settingsDataStore.accentThemeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "DYNAMIC")
+
+    val pureBlack: StateFlow<Boolean> = settingsDataStore.pureBlackFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val filterShortAudio: StateFlow<Boolean> = settingsDataStore.filterShortAudioFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val playbackSpeed: StateFlow<Float> = settingsDataStore.playbackSpeedFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
+
+    val sleepTimerState = MusicService.sleepTimerState
 
     val songs: StateFlow<List<Song>> =
-        combine(playlistDao.getAllSongs(), _searchQuery, _sortOrder) { songsFromDb, query, order ->
-            val filteredSongs = if (query.isBlank()) {
-                songsFromDb
+        combine(playlistDao.getAllSongs(), _searchQuery, _sortOrder, filterShortAudio) { songsFromDb, query, order, filterShort ->
+            val baseSongs = if (filterShort) {
+                songsFromDb.filter { it.duration >= 30_000L }
             } else {
-                songsFromDb.filter {
+                songsFromDb
+            }
+
+            val filteredSongs = if (query.isBlank()) {
+                baseSongs
+            } else {
+                baseSongs.filter {
                     it.title.contains(query, ignoreCase = true) ||
-                            it.artist.contains(query, ignoreCase = true)
+                            it.artist.contains(query, ignoreCase = true) ||
+                            it.album.contains(query, ignoreCase = true)
                 }
             }
             when (order) {
@@ -69,16 +83,31 @@ class MainViewModel(
             }
         }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    // Playlist states
+    // Library collections
     val playlists = playlistDao.getAllPlaylists().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-
-    // Favorite songs state
     val favoriteSongs = playlistDao.getFavoriteSongs().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val albums = playlistDao.getAllAlbums().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val artists = playlistDao.getAllArtists().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val recentlyPlayed = playlistDao.getRecentlyPlayedSongs().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val mostPlayed = playlistDao.getMostPlayedSongs().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    // Folders computed flow
+    val folders: StateFlow<List<FolderItem>> = playlistDao.getAllSongs().map { allSongs ->
+        allSongs.groupBy { it.folderPath }.map { (path, songList) ->
+            val folderName = if (path.isNotBlank()) File(path).name else "Root / Storage"
+            FolderItem(
+                folderPath = path,
+                folderName = folderName,
+                songCount = songList.size
+            )
+        }.filter { it.folderPath.isNotBlank() }.sortedBy { it.folderName }
+    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     fun getPlaylistWithSongs(playlistId: Long) = playlistDao.getPlaylistWithSongs(playlistId)
-
-    // Get a single song by ID
     fun getSongById(songId: Long) = playlistDao.getSongById(songId)
+    fun getSongsByAlbum(album: String) = playlistDao.getSongsByAlbum(album)
+    fun getSongsByArtist(artist: String) = playlistDao.getSongsByArtist(artist)
+    fun getSongsByFolder(folderPath: String) = playlistDao.getSongsByFolder(folderPath)
 
     val showPlaylistDialog = mutableStateOf<Song?>(null)
 
@@ -86,12 +115,55 @@ class MainViewModel(
         refreshSongs()
     }
 
-    // 3. Update toggleTheme to save the new value to DataStore
     fun toggleTheme() {
         viewModelScope.launch {
-            // Save the *opposite* of the current value
             settingsDataStore.saveThemePreference(!darkTheme.value)
         }
+    }
+
+    fun setAccentTheme(theme: String) {
+        viewModelScope.launch {
+            settingsDataStore.saveAccentTheme(theme)
+        }
+    }
+
+    fun setPureBlack(isPureBlack: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.savePureBlack(isPureBlack)
+        }
+    }
+
+    fun setFilterShortAudio(filter: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.saveFilterShortAudio(filter)
+        }
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        viewModelScope.launch {
+            settingsDataStore.savePlaybackSpeed(speed)
+            MusicService.setPlaybackSpeed(speed)
+        }
+    }
+
+    fun startSleepTimer(minutes: Int) {
+        MusicService.startSleepTimer(minutes)
+    }
+
+    fun startSleepTimerEndOfTrack() {
+        MusicService.startSleepTimerEndOfTrack()
+    }
+
+    fun cancelSleepTimer() {
+        MusicService.cancelSleepTimer()
+    }
+
+    fun playQueueItem(index: Int) {
+        MusicService.playQueueItem(index)
+    }
+
+    fun removeQueueItem(index: Int) {
+        MusicService.removeQueueItem(index)
     }
 
     fun onSearchQueryChange(query: String) {
@@ -102,6 +174,13 @@ class MainViewModel(
         _sortOrder.value = order
     }
 
+    fun loadLyrics(filePath: String) {
+        viewModelScope.launch {
+            val lyrics = LyricsManager.loadLyricsForSong(filePath)
+            _currentLyrics.value = lyrics
+        }
+    }
+
     fun refreshSongs() {
         viewModelScope.launch(Dispatchers.IO) {
             val songsList = mutableListOf<Song>()
@@ -109,6 +188,7 @@ class MainViewModel(
                 MediaStore.Audio.Media._ID,
                 MediaStore.Audio.Media.TITLE,
                 MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.ALBUM,
                 MediaStore.Audio.Media.ALBUM_ID,
                 MediaStore.Audio.Media.DURATION,
                 MediaStore.Audio.Media.DATA
@@ -128,6 +208,7 @@ class MainViewModel(
                     val idColumn = cursor.getColumnIndex(MediaStore.Audio.Media._ID)
                     val titleColumn = cursor.getColumnIndex(MediaStore.Audio.Media.TITLE)
                     val artistColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ARTIST)
+                    val albumColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM)
                     val albumIdColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID)
                     val durationColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DURATION)
                     val dataColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
@@ -136,9 +217,15 @@ class MainViewModel(
                         val id = if (idColumn >= 0) cursor.getLong(idColumn) else continue
                         val title = (if (titleColumn >= 0) cursor.getString(titleColumn) else null) ?: "Unknown Title"
                         val artist = (if (artistColumn >= 0) cursor.getString(artistColumn) else null) ?: "Unknown Artist"
+                        val album = (if (albumColumn >= 0) cursor.getString(albumColumn) else null) ?: "Unknown Album"
                         val albumId = if (albumIdColumn >= 0) cursor.getLong(albumIdColumn) else -1L
                         val duration = if (durationColumn >= 0) cursor.getLong(durationColumn) else 0L
                         val data = (if (dataColumn >= 0) cursor.getString(dataColumn) else null) ?: ""
+                        
+                        val folderPath = try {
+                            if (data.isNotBlank()) File(data).parent ?: "" else ""
+                        } catch (e: Exception) { "" }
+
                         val albumArtUri = if (albumId >= 0) {
                             ContentUris.withAppendedId(
                                 android.net.Uri.parse("content://media/external/audio/albumart"),
@@ -146,13 +233,25 @@ class MainViewModel(
                             ).toString()
                         } else null
 
-                        songsList.add(Song(id, title, artist, albumArtUri, duration, data))
+                        songsList.add(
+                            Song(
+                                id = id,
+                                title = title,
+                                artist = artist,
+                                album = album,
+                                albumId = albumId,
+                                albumArtUri = albumArtUri,
+                                duration = duration,
+                                data = data,
+                                folderPath = folderPath
+                            )
+                        )
                     }
                 }
 
                 // Reconcile with Room DB
                 val existingSongs = playlistDao.getAllSongsList()
-                val favMap = existingSongs.associate { it.id to it.isFavorite }
+                val existingMap = existingSongs.associateBy { it.id }
                 val currentMediaStoreIds = songsList.map { it.id }.toSet()
 
                 // Delete orphaned songs no longer on storage
@@ -161,14 +260,18 @@ class MainViewModel(
                     playlistDao.deleteSongsByIds(deletedIds)
                 }
 
-                // Upsert current songs while preserving favorite state
+                // Upsert current songs while preserving favorite state, playCount, and lastPlayedTimestamp
                 val reconciledSongs = songsList.map { song ->
-                    val isFav = favMap[song.id] ?: false
-                    song.copy(isFavorite = isFav)
+                    val existing = existingMap[song.id]
+                    song.copy(
+                        isFavorite = existing?.isFavorite ?: false,
+                        playCount = existing?.playCount ?: 0,
+                        lastPlayedTimestamp = existing?.lastPlayedTimestamp ?: 0L
+                    )
                 }
 
                 for (song in reconciledSongs) {
-                    if (favMap.containsKey(song.id)) {
+                    if (existingMap.containsKey(song.id)) {
                         playlistDao.updateSong(song)
                     } else {
                         playlistDao.insertSongs(listOf(song))
@@ -180,7 +283,7 @@ class MainViewModel(
         }
     }
 
-    // --- New/Updated Playlist & Favorite Management ---
+    // --- Playlist & Favorite Management ---
 
     fun toggleFavorite(song: Song) = viewModelScope.launch(Dispatchers.IO) {
         playlistDao.setFavorite(song.id, !song.isFavorite)
@@ -224,11 +327,9 @@ class MainViewModel(
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                // For Android 11+
                 val pendingIntent = MediaStore.createDeleteRequest(resolver, listOf(songUri))
                 _deletePendingIntent.emit(pendingIntent)
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // For Android 10
                 try {
                     resolver.delete(songUri, null, null)
                     playlistDao.deleteSong(song)
@@ -240,14 +341,12 @@ class MainViewModel(
                     }
                 }
             } else {
-                // For Android 9 and below
                 resolver.delete(songUri, null, null)
                 playlistDao.deleteSong(song)
                 pendingDeleteSong = null
             }
         } catch (e: Exception) {
             android.util.Log.e("MainViewModel", "Error deleting song from storage", e)
-            // Fallback: at least remove from Room DB
             playlistDao.deleteSong(song)
             pendingDeleteSong = null
         }
@@ -263,10 +362,8 @@ class MainViewModel(
     fun cancelPendingDelete() {
         pendingDeleteSong = null
     }
-
 }
 
-// 1. Update the Factory to accept SettingsDataStore
 class MainViewModelFactory(
     private val application: Application,
     private val playlistDao: PlaylistDao,
@@ -275,7 +372,6 @@ class MainViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MainViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            // 2. Pass it to the ViewModel's constructor
             return MainViewModel(application, playlistDao, settingsDataStore) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

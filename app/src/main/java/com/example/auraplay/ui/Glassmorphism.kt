@@ -31,25 +31,40 @@ data class GlassCardColors(
     val accentColor: Color
 )
 
+fun resolveAccentColor(accentTheme: String, dynamicColor: Color? = null): Color {
+    return when (accentTheme.uppercase()) {
+        "DYNAMIC" -> dynamicColor ?: Color(0xFFC084FC)
+        "PURPLE" -> Color(0xFFC084FC)
+        "CYAN" -> Color(0xFF38BDF8)
+        "SUNSET" -> Color(0xFFFB923C)
+        "EMERALD" -> Color(0xFF34D399)
+        "GOLD" -> Color(0xFFFBBF24)
+        else -> dynamicColor ?: Color(0xFFC084FC)
+    }
+}
+
 @Composable
 fun glassCardColors(
-    darkTheme: Boolean = LocalThemeIsDark.current
+    darkTheme: Boolean = LocalThemeIsDark.current,
+    customAccent: Color? = null,
+    isPureBlack: Boolean = false
 ): GlassCardColors {
+    val accent = customAccent ?: (if (darkTheme) Color(0xFFC084FC) else Color(0xFF7C3AED))
     return if (darkTheme) {
         GlassCardColors(
-            backgroundColor = Color(0xFF0D0B18).copy(alpha = 0.5f), // Frosted Mystic Dark Violet
-            borderColor = Color.White.copy(alpha = 0.12f),
-            textColor = Color(0xFFF3F4F6), // Slate White
-            subTextColor = Color(0xFF7C7A90), // Soft Violet Grey
-            accentColor = Color(0xFFC084FC) // Electric Amethyst Accent
+            backgroundColor = if (isPureBlack) Color(0xFF0A0A0C).copy(alpha = 0.85f) else Color(0xFF0D0B18).copy(alpha = 0.5f),
+            borderColor = if (isPureBlack) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f),
+            textColor = Color(0xFFF3F4F6),
+            subTextColor = Color(0xFF94A3B8),
+            accentColor = accent
         )
     } else {
         GlassCardColors(
-            backgroundColor = Color(0xFFF5F3FF).copy(alpha = 0.55f), // Frosted Royal Lavender Pearl
-            borderColor = Color(0xFFDDD6FE).copy(alpha = 0.5f), // Soft Lavender Border
-            textColor = Color(0xFF2E1065), // Deep Royal Indigo Text
-            subTextColor = Color(0xFF6D28D9), // Rich Amethyst Subtext
-            accentColor = Color(0xFF7C3AED) // Rich Neon Violet Accent
+            backgroundColor = Color(0xFFF5F3FF).copy(alpha = 0.55f),
+            borderColor = Color(0xFFDDD6FE).copy(alpha = 0.5f),
+            textColor = Color(0xFF2E1065),
+            subTextColor = Color(0xFF6D28D9),
+            accentColor = accent
         )
     }
 }
@@ -92,15 +107,16 @@ fun Modifier.glassmorphic(
         shape = shape
     )
 
-// 🌌 Ambient Background with GPU-Accelerated Animated Glow Orbs (0 Recompositions)
+// 🌌 Ambient Background with GPU-Accelerated Animated Glow Orbs
 @Composable
 fun AmbientBackground(
     modifier: Modifier = Modifier,
+    customAccent: Color? = null,
+    isPureBlack: Boolean = false,
     content: @Composable BoxScope.() -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "ambient")
     
-    // Animate floats as State objects - will ONLY be read in the Draw phase
     val orb1XState = infiniteTransition.animateFloat(
         initialValue = 0.15f,
         targetValue = 0.85f,
@@ -153,8 +169,14 @@ fun AmbientBackground(
     )
     
     val darkTheme = LocalThemeIsDark.current
-    val baseBgColor = if (darkTheme) Color(0xFF03000A) else Color(0xFFF5F3FF)
+    val baseBgColor = if (darkTheme) {
+        if (isPureBlack) Color(0xFF000000) else Color(0xFF03000A)
+    } else {
+        Color(0xFFF5F3FF)
+    }
     
+    val accentOrbColor = customAccent ?: (if (darkTheme) Color(0xFFC084FC) else Color(0xFF7C3AED))
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -163,7 +185,6 @@ fun AmbientBackground(
                 val w = size.width
                 val h = size.height
                 
-                // Read state strictly in Draw phase so children NEVER recompose
                 val o1X = orb1XState.value
                 val o1Y = orb1YState.value
                 val o2X = orb2XState.value
@@ -171,13 +192,13 @@ fun AmbientBackground(
                 val o3X = orb3XState.value
                 val o3Y = orb3YState.value
                 
-                if (darkTheme) {
-                    // Orb 1: Electric Amethyst Purple
+                if (darkTheme && !isPureBlack) {
+                    // Orb 1: Primary Accent Tint
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color(0xFFC084FC).copy(alpha = 0.22f),
-                                Color(0xFFC084FC).copy(alpha = 0f)
+                                accentOrbColor.copy(alpha = 0.22f),
+                                accentOrbColor.copy(alpha = 0f)
                             ),
                             center = androidx.compose.ui.geometry.Offset(w * o1X, h * o1Y),
                             radius = w * 0.7f
@@ -186,7 +207,7 @@ fun AmbientBackground(
                         radius = w * 0.7f
                     )
                     
-                    // Orb 2: Radiant Mint Green
+                    // Orb 2: Radiant Mint Green / Cyan
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
@@ -200,7 +221,7 @@ fun AmbientBackground(
                         radius = w * 0.6f
                     )
 
-                    // Orb 3: Cyber Neon Pink Glow
+                    // Orb 3: Cyber Pink
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
@@ -213,13 +234,12 @@ fun AmbientBackground(
                         center = androidx.compose.ui.geometry.Offset(w * o3X, h * o3Y),
                         radius = w * 0.5f
                     )
-                } else {
-                    // Orb 1: Soft Pastel Violet
+                } else if (!darkTheme) {
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color(0xFFF3E8FF).copy(alpha = 0.7f),
-                                Color(0xFFF3E8FF).copy(alpha = 0f)
+                                accentOrbColor.copy(alpha = 0.18f),
+                                accentOrbColor.copy(alpha = 0f)
                             ),
                             center = androidx.compose.ui.geometry.Offset(w * o1X, h * o1Y),
                             radius = w * 0.75f
@@ -228,7 +248,6 @@ fun AmbientBackground(
                         radius = w * 0.75f
                     )
                     
-                    // Orb 2: Soft Pastel Mint Green
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
@@ -242,7 +261,6 @@ fun AmbientBackground(
                         radius = w * 0.65f
                     )
 
-                    // Orb 3: Soft Pale Rose
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(

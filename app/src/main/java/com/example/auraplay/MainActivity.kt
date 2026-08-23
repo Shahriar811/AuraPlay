@@ -116,17 +116,17 @@ class MainActivity : ComponentActivity() {
         }
         
         setContent {
-            // This will now read from DataStore
             val darkTheme by viewModel.darkTheme.collectAsState()
+            val accentTheme by viewModel.accentTheme.collectAsState()
+            val isPureBlack by viewModel.pureBlack.collectAsState()
+
+            val effectiveAccent = resolveAccentColor(accentTheme)
             
             // Update status bar visibility based on theme
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 val insetsController = WindowInsetsControllerCompat(window, window.decorView)
-                // Use light status bar icons (dark icons) for better visibility on light backgrounds
-                // Use dark status bar icons (light icons) for better visibility on dark backgrounds
                 insetsController.isAppearanceLightStatusBars = !darkTheme
                 insetsController.isAppearanceLightNavigationBars = !darkTheme
-                // Ensure system bars are visible
                 insetsController.show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
             }
 
@@ -138,13 +138,15 @@ class MainActivity : ComponentActivity() {
                 val fullPlayerState by MusicService.playerState.collectAsState()
                 val songs by viewModel.songs.collectAsState()
 
-                // Determine if the bottom bar should be shown
                 val showBottomBar = currentDestination?.route in listOf("home", "playlists", "favorites", "settings")
 
-                AmbientBackground {
+                AmbientBackground(
+                    customAccent = effectiveAccent,
+                    isPureBlack = isPureBlack
+                ) {
                     Scaffold(
                         modifier = Modifier.systemBarsPadding(),
-                        containerColor = Color.Transparent, // Allow background to show
+                        containerColor = Color.Transparent,
                         bottomBar = {
                         if (showBottomBar) {
                             Box(
@@ -153,7 +155,7 @@ class MainActivity : ComponentActivity() {
                                     .padding(start = 24.dp, end = 24.dp, bottom = 20.dp)
                                     .glassmorphic(
                                         shape = RoundedCornerShape(28.dp),
-                                        backgroundColor = if (darkTheme) Color(0xFF1E293B).copy(alpha = 0.5f) else Color.White.copy(alpha = 0.7f),
+                                        backgroundColor = if (darkTheme) (if (isPureBlack) Color(0xFF000000).copy(alpha = 0.85f) else Color(0xFF1E293B).copy(alpha = 0.5f)) else Color.White.copy(alpha = 0.7f),
                                         borderColor = if (darkTheme) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.45f)
                                     )
                             ) {
@@ -179,11 +181,11 @@ class MainActivity : ComponentActivity() {
                                             }
                                         },
                                         colors = NavigationBarItemDefaults.colors(
-                                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                                            selectedIconColor = effectiveAccent,
+                                            selectedTextColor = effectiveAccent,
                                             unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                                             unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            indicatorColor = effectiveAccent.copy(alpha = 0.15f)
                                         )
                                     )
                                     NavigationBarItem(
@@ -203,11 +205,11 @@ class MainActivity : ComponentActivity() {
                                             }
                                         },
                                         colors = NavigationBarItemDefaults.colors(
-                                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                                            selectedIconColor = effectiveAccent,
+                                            selectedTextColor = effectiveAccent,
                                             unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                                             unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            indicatorColor = effectiveAccent.copy(alpha = 0.15f)
                                         )
                                     )
                                     NavigationBarItem(
@@ -227,11 +229,11 @@ class MainActivity : ComponentActivity() {
                                             }
                                         },
                                         colors = NavigationBarItemDefaults.colors(
-                                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                                            selectedIconColor = effectiveAccent,
+                                            selectedTextColor = effectiveAccent,
                                             unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                                             unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            indicatorColor = effectiveAccent.copy(alpha = 0.15f)
                                         )
                                     )
                                     NavigationBarItem(
@@ -251,11 +253,11 @@ class MainActivity : ComponentActivity() {
                                             }
                                         },
                                         colors = NavigationBarItemDefaults.colors(
-                                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                                            selectedIconColor = effectiveAccent,
+                                            selectedTextColor = effectiveAccent,
                                             unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                                             unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            indicatorColor = effectiveAccent.copy(alpha = 0.15f)
                                         )
                                     )
                                 }
@@ -276,7 +278,7 @@ class MainActivity : ComponentActivity() {
                         composable("player") {
                             PlayerScreen(
                                 navController = navController,
-                                viewModel = viewModel, // Pass ViewModel
+                                viewModel = viewModel,
                                 playerState = fullPlayerState,
                                 onPlayPause = {
                                     if (fullPlayerState.isPlaying) mediaController?.pause() else mediaController?.play()
@@ -320,14 +322,13 @@ class MainActivity : ComponentActivity() {
                                 viewModel = viewModel
                             )
                         }
-                        // Favorites Composable
                         composable("favorites") {
                             val favSongs by viewModel.favoriteSongs.collectAsState()
                             FavoritesScreen(
                                 navController = navController,
                                 viewModel = viewModel,
                                 onSongSelected = { song ->
-                                    val mediaItems = favSongs.map { s -> // Use favSongs list
+                                    val mediaItems = favSongs.map { s ->
                                         MediaItem.Builder()
                                             .setUri(s.data)
                                             .setMediaId(s.id.toString())
@@ -379,7 +380,6 @@ class MainActivity : ComponentActivity() {
         val permissionState = rememberPermissionState(permission)
         val glassColors = glassCardColors()
 
-        // Also request notification permission on Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val notificationPermissionState = rememberPermissionState(Manifest.permission.POST_NOTIFICATIONS)
             LaunchedEffect(notificationPermissionState.status.isGranted) {
@@ -414,7 +414,28 @@ class MainActivity : ComponentActivity() {
                             )
                             .build()
                     }
-                    mediaController?.setMediaItems(mediaItems, songs.indexOf(song), 0)
+                    val targetIndex = songs.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+                    mediaController?.setMediaItems(mediaItems, targetIndex, 0)
+                    mediaController?.prepare()
+                    mediaController?.play()
+                    navController.navigate("player")
+                },
+                onPlaySongList = { songList, song ->
+                    val mediaItems = songList.map { s ->
+                        MediaItem.Builder()
+                            .setUri(s.data)
+                            .setMediaId(s.id.toString())
+                            .setMediaMetadata(
+                                MediaMetadata.Builder()
+                                    .setTitle(s.title)
+                                    .setArtist(s.artist)
+                                    .setArtworkUri(s.albumArtUri?.let { android.net.Uri.parse(it) })
+                                    .build()
+                            )
+                            .build()
+                    }
+                    val targetIndex = songList.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+                    mediaController?.setMediaItems(mediaItems, targetIndex, 0)
                     mediaController?.prepare()
                     mediaController?.play()
                     navController.navigate("player")

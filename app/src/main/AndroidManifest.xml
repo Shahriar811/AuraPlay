@@ -42,6 +42,21 @@
             </intent-filter>
         </service>
 
+        <!-- Declare the App Widget -->
+        <receiver
+            android:name=".widget.AuraPlayAppWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.auraplay.widget.ACTION_PLAY_PAUSE" />
+                <action android:name="com.example.auraplay.widget.ACTION_PREV" />
+                <action android:name="com.example.auraplay.widget.ACTION_NEXT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/auraplay_widget_info" />
+        </receiver>
+
     </application>
 
 </manifest>
