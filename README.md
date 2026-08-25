@@ -91,6 +91,34 @@
 
 ---
 
+## 📂 Project Structure
+
+```
+com.example.auraplay/
+├── data/
+│   ├── Song.kt                  # Song data model & metadata
+│   ├── Playlist.kt              # Playlist entity & cross-references
+│   └── AppDatabase.kt           # Room DB instance & DAO definitions
+├── service/
+│   └── MusicService.kt          # Media3 MediaSessionService & player state
+├── ui/
+│   ├── HomeScreen.kt            # Main library tabs (Songs, Albums, Artists, Folders)
+│   ├── PlayerScreen.kt          # Full-screen Now Playing, Waveform, & Lyrics
+│   ├── EqualizerScreen.kt       # Multi-band Equalizer & audio presets
+│   ├── PlaylistScreen.kt        # Playlists & favorites view
+│   ├── SettingsScreen.kt        # Theme, accents, pure black, and sleep timer
+│   ├── ColorExtractor.kt        # Palette dynamic color processing
+│   └── Glassmorphism.kt         # Custom frosted-glass modifiers
+├── widget/
+│   └── AuraPlayAppWidgetProvider.kt # Homescreen interactive widget
+├── LyricsManager.kt             # LRCLIB API client & synced parser
+├── EqualizerManager.kt          # Android audio effect session controller
+├── MainViewModel.kt             # Central app state management
+└── MainActivity.kt              # Main entry point & permission flow
+```
+
+---
+
 ## 🚀 How to Build & Run
 
 ### Prerequisites
@@ -103,3 +131,16 @@
    ```bash
    git clone https://github.com/Shahriar811/AuraPlay.git
    cd AuraPlay
+   ```
+2. **Open the project** in Android Studio.
+3. **Sync Project with Gradle Files**.
+4. **Build & Run** on a physical device or emulator:
+   ```bash
+   ./gradlew assembleDebug
+   ```
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
