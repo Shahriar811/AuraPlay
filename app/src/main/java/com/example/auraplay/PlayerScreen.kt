@@ -1,5 +1,6 @@
 package com.example.auraplay.ui
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -605,7 +606,7 @@ fun PlayerScreen(
     }
 }
 
-// 🎤 Spotify-Style Interactive Live Karaoke Lyrics Component with Tap-to-Seek
+// 🎤 Authentic Spotify-Style Interactive Karaoke Lyrics Component
 @Composable
 fun SpotifyLyricsView(
     lyrics: SongLyrics,
@@ -616,6 +617,7 @@ fun SpotifyLyricsView(
     onRefreshLyrics: () -> Unit,
     onToggleLyrics: () -> Unit
 ) {
+    val darkTheme = com.example.auraplay.ui.theme.LocalThemeIsDark.current
     val glassColors = glassCardColors(customAccent = accentColor)
     val listState = rememberLazyListState()
 
@@ -623,11 +625,20 @@ fun SpotifyLyricsView(
         LyricsManager.getActiveLyricIndex(lyrics.lines, currentPosition)
     }
 
-    // Auto-scroll with gentle spring
+    // Auto-scroll so active line stays in upper third / center view like Spotify
     LaunchedEffect(activeIndex) {
         if (activeIndex >= 0 && activeIndex < lyrics.lines.size) {
-            listState.animateScrollToItem((activeIndex - 2).coerceAtLeast(0))
+            listState.animateScrollToItem(
+                index = (activeIndex - 1).coerceAtLeast(0),
+                scrollOffset = 0
+            )
         }
+    }
+
+    val lyricsBackground = if (darkTheme) {
+        Color(0xFF0C091A).copy(alpha = 0.88f)
+    } else {
+        Color(0xFFFAF8FF).copy(alpha = 0.94f)
     }
 
     Box(
@@ -635,17 +646,17 @@ fun SpotifyLyricsView(
             .fillMaxSize()
             .glassmorphic(
                 shape = RoundedCornerShape(28.dp),
-                backgroundColor = glassColors.backgroundColor,
+                backgroundColor = lyricsBackground,
                 borderColor = glassColors.borderColor
             )
-            .padding(16.dp)
+            .padding(top = 16.dp, start = 16.dp, end = 16.dp, bottom = 8.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Lyrics Header Bar
+            // Lyrics Header Bar (Spotify Style)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 8.dp),
+                    .padding(bottom = 6.dp, start = 4.dp, end = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -653,45 +664,46 @@ fun SpotifyLyricsView(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(accentColor.copy(alpha = 0.15f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .background(accentColor.copy(alpha = if (darkTheme) 0.20f else 0.15f))
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         val sourceText = when (lyrics.source) {
-                            "LOCAL" -> "📁 Local .lrc"
-                            "LRCLIB" -> "✨ Synced • LRCLIB"
-                            else -> if (lyrics.isSynced) "✨ Synced" else "📝 Plain Lyrics"
+                            "LOCAL" -> "📁 LOCAL .LRC"
+                            "LRCLIB" -> "✨ SYNCED • LRCLIB"
+                            else -> if (lyrics.isSynced) "✨ SYNCED" else "📝 LYRICS"
                         }
                         Text(
                             text = sourceText,
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.8.sp,
                             color = accentColor
                         )
                     }
                 }
 
-                Row {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = onRefreshLyrics,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Sync,
                             contentDescription = "Refresh Lyrics",
-                            tint = glassColors.subTextColor,
-                            modifier = Modifier.size(18.dp)
+                            tint = glassColors.textColor.copy(alpha = 0.85f),
+                            modifier = Modifier.size(20.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
                     IconButton(
                         onClick = onToggleLyrics,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = "Close Lyrics",
-                            tint = glassColors.subTextColor,
-                            modifier = Modifier.size(18.dp)
+                            tint = glassColors.textColor.copy(alpha = 0.85f),
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -703,14 +715,15 @@ fun SpotifyLyricsView(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(
                             color = accentColor,
-                            modifier = Modifier.size(36.dp),
+                            modifier = Modifier.size(38.dp),
                             strokeWidth = 3.dp
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
                         Text(
-                            "Searching online synced lyrics...",
-                            color = glassColors.subTextColor,
-                            fontSize = 13.sp
+                            "Searching lyrics on LRCLIB...",
+                            color = glassColors.textColor.copy(alpha = 0.85f),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
                         )
                     }
                 }
@@ -721,23 +734,23 @@ fun SpotifyLyricsView(
                         Icon(
                             Icons.Rounded.Lyrics,
                             contentDescription = null,
-                            tint = glassColors.subTextColor,
+                            tint = accentColor.copy(alpha = 0.85f),
                             modifier = Modifier.size(48.dp)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         Text(
                             "No lyrics found",
                             fontWeight = FontWeight.Bold,
                             color = glassColors.textColor,
-                            fontSize = 15.sp
+                            fontSize = 16.sp
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "Tap below to retry online search",
+                            "Tap below to retry search",
                             color = glassColors.subTextColor,
-                            fontSize = 12.sp
+                            fontSize = 13.sp
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
                         Button(
                             onClick = onRefreshLyrics,
                             colors = ButtonDefaults.buttonColors(containerColor = accentColor),
@@ -745,53 +758,76 @@ fun SpotifyLyricsView(
                         ) {
                             Icon(Icons.Rounded.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Search Online Lyrics", fontSize = 13.sp)
+                            Text("Search Online Lyrics", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
             } else if (lyrics.isSynced) {
-                // Spotify-Style Karaoke Scrolling Lyrics (Interactive Tap-to-Seek)
+                // 🎵 Spotify-Style Left-Aligned Bold Karaoke Scrolling Lyrics
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 50.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    contentPadding = PaddingValues(top = 40.dp, bottom = 120.dp, start = 8.dp, end = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                    horizontalAlignment = Alignment.Start
                 ) {
                     itemsIndexed(lyrics.lines) { index, line ->
                         val isActive = index == activeIndex
+                        val activeColor = if (darkTheme) Color.White else Color(0xFF100826)
+                        val inactiveColor = if (darkTheme) Color.White.copy(alpha = 0.40f) else Color(0xFF100826).copy(alpha = 0.40f)
+
+                        val animatedTextColor by animateColorAsState(
+                            targetValue = if (isActive) activeColor else inactiveColor,
+                            animationSpec = tween(durationMillis = 220),
+                            label = "spotifyLyricColor"
+                        )
+                        val animatedScale by animateFloatAsState(
+                            targetValue = if (isActive) 1.02f else 1.0f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                            label = "spotifyLyricScale"
+                        )
+
                         Text(
                             text = line.text,
-                            fontSize = if (isActive) 21.sp else 16.sp,
-                            fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
-                            color = if (isActive) Color.White else glassColors.textColor.copy(alpha = 0.35f),
-                            textAlign = TextAlign.Center,
+                            fontSize = if (isActive) 24.sp else 20.sp,
+                            fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Bold,
+                            color = animatedTextColor,
+                            textAlign = TextAlign.Start,
+                            lineHeight = if (isActive) 32.sp else 28.sp,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(8.dp))
                                 .clickable { onSeek(line.timeMs.toFloat()) }
-                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                                .padding(vertical = 4.dp, horizontal = 6.dp)
                                 .graphicsLayer {
-                                    scaleX = if (isActive) 1.08f else 1f
-                                    scaleY = if (isActive) 1.08f else 1f
+                                    scaleX = animatedScale
+                                    scaleY = animatedScale
                                 }
                         )
                     }
                 }
             } else {
-                // Plain text lyrics
+                // 📝 Spotify-Style Plain Text Lyrics (Split into Clean Left-Aligned Lines)
+                val plainLines = remember(lyrics.plainText) {
+                    lyrics.plainText.lines().map { it.trim() }.filter { it.isNotEmpty() }
+                }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp)
+                    contentPadding = PaddingValues(top = 28.dp, bottom = 120.dp, start = 8.dp, end = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalAlignment = Alignment.Start
                 ) {
-                    item {
+                    items(plainLines.size) { index ->
                         Text(
-                            text = lyrics.plainText,
-                            color = glassColors.textColor,
-                            fontSize = 15.sp,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 26.sp,
-                            modifier = Modifier.fillMaxWidth()
+                            text = plainLines[index],
+                            color = if (darkTheme) Color.White.copy(alpha = 0.88f) else Color(0xFF100826).copy(alpha = 0.88f),
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Start,
+                            lineHeight = 28.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp, horizontal = 6.dp)
                         )
                     }
                 }

@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -479,6 +481,8 @@ fun HomeScreen(
                 MiniPlayer(
                     song = song,
                     isPlaying = playerState.isPlaying,
+                    currentPosition = playerState.currentPosition,
+                    totalDuration = playerState.totalDuration,
                     onPlayPause = onTogglePlayPause,
                     onClick = { navController.navigate("player") },
                     modifier = Modifier.align(Alignment.BottomCenter)
@@ -899,102 +903,183 @@ fun AddToPlaylistDialog(
 fun MiniPlayer(
     song: Song,
     isPlaying: Boolean,
+    currentPosition: Long = 0L,
+    totalDuration: Long = 0L,
     onPlayPause: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val playPauseIconScale by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f), label = ""
-    )
+    val darkTheme = com.example.auraplay.ui.theme.LocalThemeIsDark.current
     val glassColors = glassCardColors()
+    val accent = glassColors.accentColor
+
+    val miniPlayerBg = if (darkTheme) {
+        Color(0xFF140F28).copy(alpha = 0.90f)
+    } else {
+        Color.White.copy(alpha = 0.94f)
+    }
+
+    val miniPlayerBorder = if (darkTheme) {
+        Brush.verticalGradient(
+            listOf(
+                Color.White.copy(alpha = 0.25f),
+                accent.copy(alpha = 0.35f),
+                Color.White.copy(alpha = 0.08f)
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            listOf(
+                Color.White,
+                accent.copy(alpha = 0.50f),
+                Color(0xFFDDD6FE).copy(alpha = 0.75f)
+            )
+        )
+    }
+
+    val playPauseIconScale by animateFloatAsState(
+        targetValue = if (isPlaying) 1f else 0.96f,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
+        label = "miniPlayScale"
+    )
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .glassmorphic(
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .shadow(
+                elevation = 16.dp,
                 shape = RoundedCornerShape(24.dp),
-                backgroundColor = glassColors.backgroundColor,
-                borderColor = glassColors.borderColor
+                clip = false,
+                ambientColor = if (darkTheme) Color.Black.copy(alpha = 0.45f) else accent.copy(alpha = 0.20f),
+                spotColor = if (darkTheme) Color.Black.copy(alpha = 0.55f) else Color(0xFF1E1035).copy(alpha = 0.22f)
+            )
+            .clip(RoundedCornerShape(24.dp))
+            .background(
+                brush = Brush.verticalGradient(
+                    listOf(
+                        miniPlayerBg,
+                        if (darkTheme) Color(0xFF0D0A1C).copy(alpha = 0.94f) else Color(0xFFF5EFFF).copy(alpha = 0.94f)
+                    )
+                )
+            )
+            .border(
+                width = 1.5.dp,
+                brush = miniPlayerBorder,
+                shape = RoundedCornerShape(24.dp)
             )
             .clickable(onClick = onClick)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (song.albumArtUri.isNullOrBlank() || song.albumArtUri == "null") {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Album Art with glassmorphic elevation and smooth corners
+                if (song.albumArtUri.isNullOrBlank() || song.albumArtUri == "null") {
+                    Box(
+                        modifier = Modifier
+                            .size(50.dp)
+                            .shadow(4.dp, RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(accent.copy(alpha = 0.15f))
+                            .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.15f else 0.5f), RoundedCornerShape(14.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.MusicNote,
+                            contentDescription = "Generic Music Icon",
+                            tint = accent,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                } else {
+                    Image(
+                        painter = rememberAsyncImagePainter(
+                            model = song.albumArtUri,
+                            error = painterResource(id = R.drawable.ic_launcher_foreground)
+                        ),
+                        contentDescription = "Album Art",
+                        modifier = Modifier
+                            .size(50.dp)
+                            .shadow(4.dp, RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(14.dp))
+                            .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.15f else 0.5f), RoundedCornerShape(14.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // Song Title & Artist with high-contrast, crisp typography
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = song.title,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        fontSize = 15.sp,
+                        color = if (darkTheme) Color(0xFFF8FAFC) else Color(0xFF1E1035)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = song.artist,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = if (darkTheme) Color(0xFF94A3B8) else Color(0xFF6B21A8).copy(alpha = 0.85f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Play / Pause Floating Glass Button
+                Surface(
+                    onClick = onPlayPause,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .scale(playPauseIconScale),
+                    shape = CircleShape,
+                    color = accent,
+                    tonalElevation = 6.dp,
+                    shadowElevation = 8.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            contentDescription = "Play/Pause",
+                            modifier = Modifier.size(24.dp),
+                            tint = Color.White
+                        )
+                    }
+                }
+            }
+
+            // Sleek Progress Track Indicator at the bottom
+            val progress = if (totalDuration > 0) (currentPosition.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f) else 0f
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
+                    .background(accent.copy(alpha = if (darkTheme) 0.12f else 0.10f))
+            ) {
                 Box(
                     modifier = Modifier
-                        .size(52.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(glassColors.accentColor.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.MusicNote,
-                        contentDescription = "Generic Music Icon",
-                        tint = glassColors.accentColor,
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
-            } else {
-                Image(
-                    painter = rememberAsyncImagePainter(
-                        model = song.albumArtUri,
-                        error = painterResource(id = R.drawable.ic_launcher_foreground)
-                    ),
-                    contentDescription = "Album Art",
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(RoundedCornerShape(14.dp)),
-                    contentScale = ContentScale.Crop
+                        .fillMaxWidth(progress)
+                        .fillMaxHeight()
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(accent, accent.copy(alpha = 0.85f))
+                            )
+                        )
                 )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = song.title,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = glassColors.textColor
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = song.artist,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = glassColors.subTextColor
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Surface(
-                onClick = onPlayPause,
-                modifier = Modifier
-                    .size(44.dp)
-                    .scale(playPauseIconScale),
-                shape = CircleShape,
-                color = glassColors.accentColor,
-                tonalElevation = 4.dp,
-                shadowElevation = 8.dp
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        contentDescription = "Play/Pause",
-                        modifier = Modifier.size(24.dp),
-                        tint = Color.White
-                    )
-                }
             }
         }
     }

@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.ColorUtils
 import com.example.auraplay.ui.theme.LocalThemeIsDark
 
 // 💫 Dynamic glassmorphic styling parameters
@@ -33,14 +34,46 @@ data class GlassCardColors(
 
 fun resolveAccentColor(accentTheme: String, dynamicColor: Color? = null): Color {
     return when (accentTheme.uppercase()) {
-        "DYNAMIC" -> dynamicColor ?: Color(0xFFC084FC)
+        "DYNAMIC" -> dynamicColor?.let { sanitizeDynamicColor(it) } ?: Color(0xFFC084FC)
         "PURPLE" -> Color(0xFFC084FC)
         "CYAN" -> Color(0xFF38BDF8)
         "SUNSET" -> Color(0xFFFB923C)
         "EMERALD" -> Color(0xFF34D399)
         "GOLD" -> Color(0xFFFBBF24)
-        else -> dynamicColor ?: Color(0xFFC084FC)
+        else -> dynamicColor?.let { sanitizeDynamicColor(it) } ?: Color(0xFFC084FC)
     }
+}
+
+/**
+ * Ensures any dynamic color is vivid and clearly visible.
+ * Filters out gray/white/washed-out tones and boosts saturation.
+ */
+fun sanitizeDynamicColor(color: Color): Color {
+    val hsl = FloatArray(3)
+    ColorUtils.RGBToHSL(
+        (color.red * 255).toInt(),
+        (color.green * 255).toInt(),
+        (color.blue * 255).toInt(),
+        hsl
+    )
+
+    // If color is gray (saturation < 0.35) or too close to white/black
+    if (hsl[1] < 0.35f || hsl[2] > 0.78f || hsl[2] < 0.18f) {
+        if (hsl[1] >= 0.18f) {
+            hsl[1] = hsl[1].coerceIn(0.70f, 0.98f)
+            hsl[2] = hsl[2].coerceIn(0.48f, 0.62f)
+            val boosted = ColorUtils.HSLToColor(hsl)
+            return Color(boosted)
+        }
+        // Fallback for purely monochrome/grayscale covers
+        return Color(0xFFC084FC)
+    }
+
+    // Boost saturation and keep in ideal lightness range
+    hsl[1] = hsl[1].coerceIn(0.68f, 0.98f)
+    hsl[2] = hsl[2].coerceIn(0.48f, 0.62f)
+    val boosted = ColorUtils.HSLToColor(hsl)
+    return Color(boosted)
 }
 
 @Composable

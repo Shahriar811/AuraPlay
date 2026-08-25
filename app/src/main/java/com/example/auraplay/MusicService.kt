@@ -1,5 +1,6 @@
 package com.example.auraplay.service
 
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -12,6 +13,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.example.auraplay.AuraPlayApplication
+import com.example.auraplay.MainActivity
 import com.example.auraplay.data.Song
 import com.example.auraplay.EqualizerManager
 import kotlinx.coroutines.*
@@ -136,7 +138,20 @@ class MusicService : MediaSessionService(), Player.Listener {
         val exoPlayer = ExoPlayer.Builder(this).build()
         exoPlayer.addListener(this)
         player = exoPlayer
-        mediaSession = MediaSession.Builder(this, exoPlayer).build()
+
+        val openAppIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        mediaSession = MediaSession.Builder(this, exoPlayer)
+            .setSessionActivity(pendingIntent)
+            .build()
 
         val sessionId = exoPlayer.audioSessionId
         if (sessionId > 0) {

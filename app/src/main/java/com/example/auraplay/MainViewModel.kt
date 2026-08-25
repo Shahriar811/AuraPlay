@@ -13,6 +13,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.auraplay.data.*
 import com.example.auraplay.service.MusicService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -40,6 +41,27 @@ class MainViewModel(
 
     private val _currentLyrics = MutableStateFlow(SongLyrics())
     val currentLyrics = _currentLyrics.asStateFlow()
+
+    private val _isLyricsLoading = MutableStateFlow(false)
+    val isLyricsLoading = _isLyricsLoading.asStateFlow()
+
+    private var loadLyricsJob: Job? = null
+
+    init {
+        // Automatically load synced lyrics whenever active song changes
+        viewModelScope.launch {
+            MusicService.playerState
+                .map { it.currentSong }
+                .distinctUntilChangedBy { it?.id }
+                .collect { song ->
+                    if (song != null) {
+                        loadLyrics(song, forceRefresh = false)
+                    } else {
+                        _currentLyrics.value = SongLyrics()
+                    }
+                }
+        }
+    }
 
     // Settings Flows
     val darkTheme: StateFlow<Boolean> = settingsDataStore.darkThemeFlow
@@ -174,12 +196,13 @@ class MainViewModel(
         _sortOrder.value = order
     }
 
-    private val _isLyricsLoading = MutableStateFlow(false)
-    val isLyricsLoading = _isLyricsLoading.asStateFlow()
-
     fun loadLyrics(song: Song?, forceRefresh: Boolean = false) {
-        if (song == null) return
-        viewModelScope.launch {
+        if (song == null) {
+            _currentLyrics.value = SongLyrics()
+            return
+        }
+        loadLyricsJob?.cancel()
+        loadLyricsJob = viewModelScope.launch {
             _isLyricsLoading.value = true
             val lyrics = LyricsManager.getLyricsForSong(song, playlistDao, forceRefresh)
             _currentLyrics.value = lyrics

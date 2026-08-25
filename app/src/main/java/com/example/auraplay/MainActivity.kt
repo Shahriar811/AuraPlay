@@ -119,8 +119,10 @@ class MainActivity : ComponentActivity() {
             val darkTheme by viewModel.darkTheme.collectAsState()
             val accentTheme by viewModel.accentTheme.collectAsState()
             val isPureBlack by viewModel.pureBlack.collectAsState()
+            val fullPlayerState by MusicService.playerState.collectAsState()
+            val dynamicColors = rememberDominantColors(this, fullPlayerState.currentSong?.albumArtUri)
 
-            val effectiveAccent = resolveAccentColor(accentTheme)
+            val effectiveAccent = resolveAccentColor(accentTheme, dynamicColors.dominantColor)
             
             // Update status bar visibility based on theme
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -135,7 +137,6 @@ class MainActivity : ComponentActivity() {
                 val currentBackStack by navController.currentBackStackEntryAsState()
                 val currentDestination = currentBackStack?.destination
 
-                val fullPlayerState by MusicService.playerState.collectAsState()
                 val songs by viewModel.songs.collectAsState()
 
                 val showBottomBar = currentDestination?.route in listOf("home", "playlists", "favorites", "settings")
