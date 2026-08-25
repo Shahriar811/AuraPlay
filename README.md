@@ -8,13 +8,27 @@
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4.svg?style=flat&logo=android)](https://developer.android.com/jetpack/compose)
 [![Media3](https://img.shields.io/badge/AndroidX%20Media3-1.2.1-green.svg?style=flat&logo=google)](https://developer.android.com/guide/topics/media/media3)
 [![Room Database](https://img.shields.io/badge/Room-2.6.1-orange.svg?style=flat&logo=sqlite)](https://developer.android.com/training/data-storage/room)
+[![Download APK](https://img.shields.io/badge/Download-Latest%20APK-success?style=flat&logo=android)](https://github.com/Shahriar811/AuraPlay/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat)](LICENSE)
 
 <p align="center">
-  <b>A modern, fluid, and aesthetic local music player for Android built entirely with Kotlin and Jetpack Compose.</b>
+  <b>A modern, fluid, and aesthetic local music player for Android built entirely with Kotlin and Jetpack Compose.</b><br/>
+  <br/>
+  <a href="https://github.com/Shahriar811/AuraPlay/releases/latest">
+    <img src="https://img.shields.io/badge/⬇️_Download_AuraPlay_APK-7C3AED?style=for-the-badge&logoColor=white" alt="Download APK" />
+  </a>
 </p>
 
 </div>
+
+---
+
+## 📥 Download & Installation
+
+1. Go to the [**Latest Releases**](https://github.com/Shahriar811/AuraPlay/releases/latest) page.
+2. Download `app-debug.apk` (or `AuraPlay.apk`).
+3. Open the downloaded file on your Android device and tap **Install** (allow *Install from Unknown Sources* if prompted).
+
 
 ---
 
