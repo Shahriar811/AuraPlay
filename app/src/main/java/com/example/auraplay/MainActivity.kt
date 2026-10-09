@@ -48,6 +48,8 @@ import androidx.lifecycle.Lifecycle
 import kotlinx.coroutines.launch
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 @Suppress("OPT_IN_IS_NOT_ENABLED")
 @OptIn(ExperimentalPermissionsApi::class)
@@ -101,43 +103,37 @@ class MainActivity : ComponentActivity() {
             }
         }
         
-        // Enable 120Hz support
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.setDecorFitsSystemWindows(false)
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            // Request highest available refresh rate
-            window.attributes.preferredDisplayModeId = 0 // 0 means use highest available
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = (
-                android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-            )
-        }
+        // Standard edge-to-edge layout without hardware display mode overrides
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         
         setContent {
             val darkTheme by viewModel.darkTheme.collectAsState()
             val accentTheme by viewModel.accentTheme.collectAsState()
             val isPureBlack by viewModel.pureBlack.collectAsState()
-            val fullPlayerState by MusicService.playerState.collectAsState()
-            val dynamicColors = rememberDominantColors(this, fullPlayerState.currentSong?.albumArtUri)
 
-            val effectiveAccent = resolveAccentColor(accentTheme, dynamicColors.dominantColor)
-            
-            // Update status bar visibility based on theme
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                val insetsController = WindowInsetsControllerCompat(window, window.decorView)
+            val insetsController = remember(window) { WindowInsetsControllerCompat(window, window.decorView) }
+            DisposableEffect(darkTheme) {
                 insetsController.isAppearanceLightStatusBars = !darkTheme
                 insetsController.isAppearanceLightNavigationBars = !darkTheme
-                insetsController.show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+                onDispose {}
+            }
+
+            // Isolate artwork URI so playback position ticks never recompose MainActivity root
+            val currentArtworkUri by remember {
+                MusicService.playerState
+                    .map { it.currentSong?.albumArtUri }
+                    .distinctUntilChanged()
+            }.collectAsState(initial = null)
+
+            val dynamicColors = rememberDominantColors(this, currentArtworkUri)
+            val effectiveAccent = remember(accentTheme, dynamicColors.dominantColor) {
+                resolveAccentColor(accentTheme, dynamicColors.dominantColor)
             }
 
             AuraPlayTheme(darkTheme = darkTheme) {
                 val navController = rememberNavController()
                 val currentBackStack by navController.currentBackStackEntryAsState()
                 val currentDestination = currentBackStack?.destination
-
-                val songs by viewModel.songs.collectAsState()
 
                 val showBottomBar = currentDestination?.route in listOf("home", "playlists", "favorites", "settings")
 
@@ -271,12 +267,11 @@ class MainActivity : ComponentActivity() {
                             HomeScreenWithPermission(
                                 navController = navController,
                                 viewModel = viewModel,
-                                playerState = fullPlayerState,
-                                songs = songs,
                                 mediaController = mediaController
                             )
                         }
                         composable("player") {
+                            val fullPlayerState by MusicService.playerState.collectAsState()
                             PlayerScreen(
                                 navController = navController,
                                 viewModel = viewModel,
@@ -369,8 +364,6 @@ class MainActivity : ComponentActivity() {
     private fun HomeScreenWithPermission(
         navController: NavController,
         viewModel: MainViewModel,
-        playerState: PlayerState,
-        songs: List<Song>,
         mediaController: MediaController?
     ) {
         val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -390,18 +383,12 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        LaunchedEffect(permissionState.status.isGranted) {
-            if (permissionState.status.isGranted) {
-                viewModel.refreshSongs()
-            }
-        }
-
         if (permissionState.status.isGranted) {
             HomeScreen(
                 navController = navController,
                 viewModel = viewModel,
-                playerState = playerState,
                 onPlaySong = { song ->
+                    val songs = viewModel.songs.value
                     val mediaItems = songs.map { s ->
                         MediaItem.Builder()
                             .setUri(s.data)
@@ -442,7 +429,12 @@ class MainActivity : ComponentActivity() {
                     navController.navigate("player")
                 },
                 onTogglePlayPause = {
-                    if (playerState.isPlaying) mediaController?.pause() else mediaController?.play()
+                    mediaController?.let {
+                        if (it.isPlaying) it.pause() else it.play()
+                    }
+                },
+                onNextSong = {
+                    mediaController?.seekToNext()
                 }
             )
         } else {

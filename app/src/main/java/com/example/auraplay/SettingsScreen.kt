@@ -215,6 +215,7 @@ fun SettingsScreen(navController: NavController, viewModel: MainViewModel) {
                         backgroundColor = glassColors.backgroundColor,
                         borderColor = glassColors.borderColor
                     )
+                    .clip(RoundedCornerShape(20.dp))
                     .clickable { navController.navigate("equalizer") }
             ) {
                 Row(
@@ -281,6 +282,7 @@ fun SettingsScreen(navController: NavController, viewModel: MainViewModel) {
                         backgroundColor = glassColors.backgroundColor,
                         borderColor = glassColors.borderColor
                     )
+                    .clip(RoundedCornerShape(20.dp))
                     .clickable { viewModel.refreshSongs() }
             ) {
                 Row(

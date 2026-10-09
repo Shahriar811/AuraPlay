@@ -49,6 +49,22 @@ interface PlaylistDao {
     @Update
     suspend fun updateSong(song: Song)
 
+    @Update
+    suspend fun updateSongs(songs: List<Song>)
+
+    @Transaction
+    suspend fun syncSongs(toInsert: List<Song>, toUpdate: List<Song>, toDelete: List<Long>) {
+        if (toDelete.isNotEmpty()) {
+            deleteSongsByIds(toDelete)
+        }
+        if (toInsert.isNotEmpty()) {
+            insertSongs(toInsert)
+        }
+        if (toUpdate.isNotEmpty()) {
+            updateSongs(toUpdate)
+        }
+    }
+
     @Query("SELECT * FROM Song")
     suspend fun getAllSongsList(): List<Song>
 

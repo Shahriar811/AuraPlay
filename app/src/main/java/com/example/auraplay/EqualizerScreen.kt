@@ -526,6 +526,12 @@ fun BassBoostSection(
                 // Toggle button to enable/disable bass boost
                 Box(
                     modifier = Modifier
+                        .glassmorphic(
+                            shape = RoundedCornerShape(16.dp),
+                            backgroundColor = if (isBassBoostEnabled) glassColors.accentColor.copy(alpha = 0.2f) else glassColors.backgroundColor.copy(alpha = 0.3f),
+                            borderColor = if (isBassBoostEnabled) glassColors.accentColor.copy(alpha = 0.5f) else glassColors.borderColor
+                        )
+                        .clip(RoundedCornerShape(16.dp))
                         .clickable {
                             if (isBassBoostEnabled) {
                                 currentBassBoost = 0
@@ -535,11 +541,6 @@ fun BassBoostSection(
                                 equalizerManager.setBassBoost(500)
                             }
                         }
-                        .glassmorphic(
-                            shape = RoundedCornerShape(16.dp),
-                            backgroundColor = if (isBassBoostEnabled) glassColors.accentColor.copy(alpha = 0.2f) else glassColors.backgroundColor.copy(alpha = 0.3f),
-                            borderColor = if (isBassBoostEnabled) glassColors.accentColor.copy(alpha = 0.5f) else glassColors.borderColor
-                        )
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -722,6 +723,7 @@ fun ReverbSection(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable { equalizerManager.setReverbPreset(preset) }
                         .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically

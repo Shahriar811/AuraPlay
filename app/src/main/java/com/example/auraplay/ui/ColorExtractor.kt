@@ -29,13 +29,35 @@ object ColorExtractor {
 
         try {
             val uri = Uri.parse(uriString)
-            val inputStream = context.contentResolver.openInputStream(uri)
-            val bitmap = BitmapFactory.decodeStream(inputStream)
-            inputStream?.close()
+            val boundsOptions = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream, null, boundsOptions)
+            }
+
+            // Downsample target: ~128px for ultra-fast, zero-jank palette extraction
+            val targetSize = 128
+            var sampleSize = 1
+            val maxDim = maxOf(boundsOptions.outWidth, boundsOptions.outHeight)
+            if (maxDim > targetSize) {
+                while ((maxDim / (sampleSize * 2)) >= targetSize) {
+                    sampleSize *= 2
+                }
+            }
+
+            val decodeOptions = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+
+            val bitmap = context.contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream, null, decodeOptions)
+            }
 
             if (bitmap != null) {
                 val palette = Palette.from(bitmap)
-                    .maximumColorCount(24)
+                    .maximumColorCount(16)
                     .generate()
 
                 val vividColor = selectBestVividColor(palette)

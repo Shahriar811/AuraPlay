@@ -469,12 +469,16 @@ fun PlayerScreen(
                         // Shuffle Button
                         Box(
                             modifier = Modifier
-                                .size(42.dp)
-                                .clickable(onClick = onToggleShuffle)
+                                .size(44.dp)
+                                .bouncingClickable(
+                                    shape = CircleShape,
+                                    scaleDown = 0.88f,
+                                    onClick = onToggleShuffle
+                                )
                                 .glassmorphic(
                                     shape = CircleShape,
-                                    backgroundColor = if (playerState.isShuffleOn) glassColors.accentColor.copy(alpha = 0.2f) else Color.Transparent,
-                                    borderColor = if (playerState.isShuffleOn) glassColors.accentColor.copy(alpha = 0.4f) else Color.Transparent
+                                    backgroundColor = if (playerState.isShuffleOn) glassColors.accentColor.copy(alpha = 0.25f) else Color.Transparent,
+                                    borderColor = if (playerState.isShuffleOn) glassColors.accentColor.copy(alpha = 0.5f) else Color.Transparent
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
@@ -486,14 +490,18 @@ fun PlayerScreen(
                             )
                         }
 
-                        // Previous Button
+                        // Previous Button (Zero box artifact, spring bounce physics)
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
-                                .clickable(onClick = onPrevious)
+                                .size(50.dp)
+                                .bouncingClickable(
+                                    shape = CircleShape,
+                                    scaleDown = 0.88f,
+                                    onClick = onPrevious
+                                )
                                 .glassmorphic(
                                     shape = CircleShape,
-                                    backgroundColor = glassColors.backgroundColor.copy(alpha = 0.2f),
+                                    backgroundColor = glassColors.backgroundColor.copy(alpha = 0.35f),
                                     borderColor = glassColors.borderColor
                                 ),
                             contentAlignment = Alignment.Center
@@ -501,25 +509,35 @@ fun PlayerScreen(
                             Icon(
                                 imageVector = Icons.Rounded.SkipPrevious,
                                 contentDescription = "Previous",
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(26.dp),
                                 tint = glassColors.textColor
                             )
                         }
 
-                        // Play/Pause Button with Dynamic Glow
+                        // Play/Pause Button with Dynamic Glow & Breathing Spring Scale
+                        val playPauseScale by animateFloatAsState(
+                            targetValue = if (playerState.isPlaying) 1f else 0.96f,
+                            animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+                            label = "playPausePulse"
+                        )
                         Box(
                             modifier = Modifier
                                 .size(68.dp)
-                                .clickable(onClick = onPlayPause)
+                                .scale(playPauseScale)
                                 .shadow(
-                                    elevation = 12.dp,
+                                    elevation = 14.dp,
                                     shape = CircleShape,
                                     clip = false,
                                     ambientColor = dynamicAccent,
                                     spotColor = dynamicAccent
                                 )
                                 .background(dynamicAccent, CircleShape)
-                                .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape),
+                                .border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                                .bouncingClickable(
+                                    shape = CircleShape,
+                                    scaleDown = 0.90f,
+                                    onClick = onPlayPause
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -530,14 +548,18 @@ fun PlayerScreen(
                             )
                         }
 
-                        // Next Button
+                        // Next Button (Zero box artifact, spring bounce physics)
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
-                                .clickable(onClick = onNext)
+                                .size(50.dp)
+                                .bouncingClickable(
+                                    shape = CircleShape,
+                                    scaleDown = 0.88f,
+                                    onClick = onNext
+                                )
                                 .glassmorphic(
                                     shape = CircleShape,
-                                    backgroundColor = glassColors.backgroundColor.copy(alpha = 0.2f),
+                                    backgroundColor = glassColors.backgroundColor.copy(alpha = 0.35f),
                                     borderColor = glassColors.borderColor
                                 ),
                             contentAlignment = Alignment.Center
@@ -545,7 +567,7 @@ fun PlayerScreen(
                             Icon(
                                 imageVector = Icons.Rounded.SkipNext,
                                 contentDescription = "Next",
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(26.dp),
                                 tint = glassColors.textColor
                             )
                         }
@@ -558,12 +580,16 @@ fun PlayerScreen(
                         }
                         Box(
                             modifier = Modifier
-                                .size(42.dp)
-                                .clickable(onClick = onToggleRepeatMode)
+                                .size(44.dp)
+                                .bouncingClickable(
+                                    shape = CircleShape,
+                                    scaleDown = 0.88f,
+                                    onClick = onToggleRepeatMode
+                                )
                                 .glassmorphic(
                                     shape = CircleShape,
-                                    backgroundColor = if (playerState.repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF) glassColors.accentColor.copy(alpha = 0.2f) else Color.Transparent,
-                                    borderColor = if (playerState.repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF) glassColors.accentColor.copy(alpha = 0.4f) else Color.Transparent
+                                    backgroundColor = if (playerState.repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF) glassColors.accentColor.copy(alpha = 0.25f) else Color.Transparent,
+                                    borderColor = if (playerState.repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF) glassColors.accentColor.copy(alpha = 0.5f) else Color.Transparent
                                 ),
                             contentAlignment = Alignment.Center
                         ) {

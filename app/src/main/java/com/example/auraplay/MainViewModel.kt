@@ -14,6 +14,7 @@ import com.example.auraplay.data.*
 import com.example.auraplay.service.MusicService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -103,27 +104,35 @@ class MainViewModel(
                 SortOrder.ARTIST -> filteredSongs.sortedBy { it.artist }
                 SortOrder.DATE_ADDED -> filteredSongs.sortedByDescending { it.id }
             }
-        }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Library collections
-    val playlists = playlistDao.getAllPlaylists().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    val favoriteSongs = playlistDao.getFavoriteSongs().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    val albums = playlistDao.getAllAlbums().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    val artists = playlistDao.getAllArtists().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    val recentlyPlayed = playlistDao.getRecentlyPlayedSongs().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    val mostPlayed = playlistDao.getMostPlayedSongs().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val playlists = playlistDao.getAllPlaylists().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val favoriteSongs = playlistDao.getFavoriteSongs().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val albums = playlistDao.getAllAlbums().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val artists = playlistDao.getAllArtists().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val recentlyPlayed = playlistDao.getRecentlyPlayedSongs().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val mostPlayed = playlistDao.getMostPlayedSongs().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Folders computed flow
+    // Folders computed flow on Dispatchers.Default with fast string parsing
     val folders: StateFlow<List<FolderItem>> = playlistDao.getAllSongs().map { allSongs ->
-        allSongs.groupBy { it.folderPath }.map { (path, songList) ->
-            val folderName = if (path.isNotBlank()) File(path).name else "Root / Storage"
-            FolderItem(
-                folderPath = path,
-                folderName = folderName,
-                songCount = songList.size
-            )
-        }.filter { it.folderPath.isNotBlank() }.sortedBy { it.folderName }
-    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+        allSongs.groupBy { it.folderPath }.mapNotNull { (path, songList) ->
+            if (path.isBlank()) null else {
+                val folderName = path.substringAfterLast(File.separatorChar).takeIf { it.isNotBlank() }
+                    ?: path.substringAfterLast('/').takeIf { it.isNotBlank() }
+                    ?: path
+                FolderItem(
+                    folderPath = path,
+                    folderName = folderName,
+                    songCount = songList.size
+                )
+            }
+        }.sortedBy { it.folderName }
+    }
+    .flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun getPlaylistWithSongs(playlistId: Long) = playlistDao.getPlaylistWithSongs(playlistId)
     fun getSongById(songId: Long) = playlistDao.getSongById(songId)
@@ -133,8 +142,12 @@ class MainViewModel(
 
     val showPlaylistDialog = mutableStateOf<Song?>(null)
 
+    private val isRefreshing = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var refreshJob: Job? = null
+
     init {
-        refreshSongs()
+        // Defer initial MediaStore sync by 3 seconds so cold start renders instantly from local Room DB with zero I/O contention
+        refreshSongs(delayMs = 3000L)
     }
 
     fun toggleTheme() {
@@ -210,8 +223,20 @@ class MainViewModel(
         }
     }
 
-    fun refreshSongs() {
-        viewModelScope.launch(Dispatchers.IO) {
+    fun refreshSongs(delayMs: Long = 0L) {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch(Dispatchers.IO) {
+            if (delayMs > 0L) {
+                delay(delayMs)
+            }
+            if (!isRefreshing.compareAndSet(false, true)) return@launch
+
+            try {
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+            } catch (e: Exception) {
+                // Safety
+            }
+
             val songsList = mutableListOf<Song>()
             val projection = arrayOf(
                 MediaStore.Audio.Media._ID,
@@ -278,36 +303,49 @@ class MainViewModel(
                     }
                 }
 
-                // Reconcile with Room DB
+                // Reconcile with Room DB atomically without invalidation thrashing
                 val existingSongs = playlistDao.getAllSongsList()
                 val existingMap = existingSongs.associateBy { it.id }
                 val currentMediaStoreIds = songsList.map { it.id }.toSet()
 
                 // Delete orphaned songs no longer on storage
                 val deletedIds = existingSongs.map { it.id }.filterNot { currentMediaStoreIds.contains(it) }
-                if (deletedIds.isNotEmpty()) {
-                    playlistDao.deleteSongsByIds(deletedIds)
-                }
 
-                // Upsert current songs while preserving favorite state, playCount, and lastPlayedTimestamp
-                val reconciledSongs = songsList.map { song ->
+                val toInsert = mutableListOf<Song>()
+                val toUpdate = mutableListOf<Song>()
+
+                for (song in songsList) {
                     val existing = existingMap[song.id]
-                    song.copy(
-                        isFavorite = existing?.isFavorite ?: false,
-                        playCount = existing?.playCount ?: 0,
-                        lastPlayedTimestamp = existing?.lastPlayedTimestamp ?: 0L
-                    )
+                    if (existing == null) {
+                        toInsert.add(song)
+                    } else {
+                        val metadataChanged = existing.title != song.title ||
+                                existing.artist != song.artist ||
+                                existing.album != song.album ||
+                                existing.albumId != song.albumId ||
+                                existing.albumArtUri != song.albumArtUri ||
+                                existing.duration != song.duration ||
+                                existing.data != song.data ||
+                                existing.folderPath != song.folderPath
+
+                        if (metadataChanged) {
+                            val merged = song.copy(
+                                isFavorite = existing.isFavorite,
+                                playCount = existing.playCount,
+                                lastPlayedTimestamp = existing.lastPlayedTimestamp
+                            )
+                            toUpdate.add(merged)
+                        }
+                    }
                 }
 
-                for (song in reconciledSongs) {
-                    if (existingMap.containsKey(song.id)) {
-                        playlistDao.updateSong(song)
-                    } else {
-                        playlistDao.insertSongs(listOf(song))
-                    }
+                if (deletedIds.isNotEmpty() || toInsert.isNotEmpty() || toUpdate.isNotEmpty()) {
+                    playlistDao.syncSongs(toInsert = toInsert, toUpdate = toUpdate, toDelete = deletedIds)
                 }
             } catch (e: Exception) {
                 android.util.Log.e("MainViewModel", "Error refreshing songs from MediaStore", e)
+            } finally {
+                isRefreshing.set(false)
             }
         }
     }

@@ -1,12 +1,19 @@
 package com.example.auraplay.ui
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -102,30 +109,31 @@ fun glassCardColors(
     }
 }
 
-// 🪄 Glassmorphic Modifier with Modern Soft Drop Shadows
+// 🪄 Glassmorphic Modifier with Guaranteed Clipped Borders and Dynamic Shadows
 fun Modifier.glassmorphic(
     shape: Shape = RoundedCornerShape(20.dp),
     borderWidth: Dp = 1.dp,
     borderColor: Color = Color.White.copy(alpha = 0.12f),
     backgroundColor: Color = Color.White.copy(alpha = 0.06f),
-    shadowElevation: Dp = 6.dp
+    shadowElevation: Dp = 0.dp
 ): Modifier = this
-    .shadow(
-        elevation = shadowElevation,
-        shape = shape,
-        clip = false,
-        ambientColor = Color.Black.copy(alpha = 0.05f),
-        spotColor = Color.Black.copy(alpha = 0.1f)
+    .then(
+        if (shadowElevation > 0.dp) {
+            Modifier.shadow(
+                elevation = shadowElevation,
+                shape = shape,
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.05f),
+                spotColor = Color.Black.copy(alpha = 0.1f)
+            )
+        } else Modifier
     )
-    .graphicsLayer {
-        this.shape = shape
-        this.clip = true
-    }
+    .clip(shape)
     .background(
         Brush.verticalGradient(
             colors = listOf(
                 backgroundColor,
-                backgroundColor.copy(alpha = (backgroundColor.alpha * 0.4f).coerceAtLeast(0.01f))
+                backgroundColor.copy(alpha = (backgroundColor.alpha * 0.45f).coerceAtLeast(0.01f))
             )
         )
     )
@@ -140,7 +148,37 @@ fun Modifier.glassmorphic(
         shape = shape
     )
 
-// 🌌 Ambient Background with GPU-Accelerated Animated Glow Orbs
+/**
+ * Tactile spring press feedback with bounded shape ripple.
+ * Fixes the square ripple box issue on circular or rounded buttons and provides smooth physical bounce.
+ */
+@Composable
+fun Modifier.bouncingClickable(
+    enabled: Boolean = true,
+    shape: Shape = CircleShape,
+    scaleDown: Float = 0.88f,
+    onClick: () -> Unit
+): Modifier {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) scaleDown else 1f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f),
+        label = "bounceScale"
+    )
+
+    return this
+        .scale(scale)
+        .clip(shape)
+        .clickable(
+            interactionSource = interactionSource,
+            indication = androidx.compose.material3.ripple(bounded = true),
+            enabled = enabled,
+            onClick = onClick
+        )
+}
+
+// 🌌 High-Performance GPU-Accelerated Ambient Background
 @Composable
 fun AmbientBackground(
     modifier: Modifier = Modifier,
@@ -148,167 +186,81 @@ fun AmbientBackground(
     isPureBlack: Boolean = false,
     content: @Composable BoxScope.() -> Unit
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "ambient")
-    
-    val orb1XState = infiniteTransition.animateFloat(
-        initialValue = 0.15f,
-        targetValue = 0.85f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(22000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ), label = "orb1X"
-    )
-    val orb1YState = infiniteTransition.animateFloat(
-        initialValue = 0.2f,
-        targetValue = 0.75f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(19000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ), label = "orb1Y"
-    )
-    
-    val orb2XState = infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 0.2f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(25000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ), label = "orb2X"
-    )
-    val orb2YState = infiniteTransition.animateFloat(
-        initialValue = 0.7f,
-        targetValue = 0.25f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(17000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ), label = "orb2Y"
-    )
-
-    val orb3XState = infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.7f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(30000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ), label = "orb3X"
-    )
-    val orb3YState = infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 0.3f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(21000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ), label = "orb3Y"
-    )
-    
     val darkTheme = LocalThemeIsDark.current
     val baseBgColor = if (darkTheme) {
-        if (isPureBlack) Color(0xFF000000) else Color(0xFF03000A)
+        if (isPureBlack) Color(0xFF000000) else Color(0xFF05030C)
     } else {
-        Color(0xFFF5F3FF)
+        Color(0xFFF8F6FF)
     }
-    
-    val accentOrbColor = customAccent ?: (if (darkTheme) Color(0xFFC084FC) else Color(0xFF7C3AED))
+
+    val targetAccent = customAccent ?: (if (darkTheme) Color(0xFFC084FC) else Color(0xFF7C3AED))
+    val animatedAccent by animateColorAsState(
+        targetValue = targetAccent,
+        animationSpec = tween(700, easing = LinearOutSlowInEasing),
+        label = "ambientAccent"
+    )
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(baseBgColor)
-            .drawBehind {
-                val w = size.width
-                val h = size.height
-                
-                val o1X = orb1XState.value
-                val o1Y = orb1YState.value
-                val o2X = orb2XState.value
-                val o2Y = orb2YState.value
-                val o3X = orb3XState.value
-                val o3Y = orb3YState.value
-                
-                if (darkTheme && !isPureBlack) {
-                    // Orb 1: Primary Accent Tint
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                accentOrbColor.copy(alpha = 0.22f),
-                                accentOrbColor.copy(alpha = 0f)
-                            ),
-                            center = androidx.compose.ui.geometry.Offset(w * o1X, h * o1Y),
-                            radius = w * 0.7f
-                        ),
-                        center = androidx.compose.ui.geometry.Offset(w * o1X, h * o1Y),
-                        radius = w * 0.7f
-                    )
-                    
-                    // Orb 2: Radiant Mint Green / Cyan
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF34D399).copy(alpha = 0.16f),
-                                Color(0xFF34D399).copy(alpha = 0f)
-                            ),
-                            center = androidx.compose.ui.geometry.Offset(w * o2X, h * o2Y),
-                            radius = w * 0.6f
-                        ),
-                        center = androidx.compose.ui.geometry.Offset(w * o2X, h * o2Y),
-                        radius = w * 0.6f
-                    )
-
-                    // Orb 3: Cyber Pink
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFFF472B6).copy(alpha = 0.14f),
-                                Color(0xFFF472B6).copy(alpha = 0f)
-                            ),
-                            center = androidx.compose.ui.geometry.Offset(w * o3X, h * o3Y),
-                            radius = w * 0.5f
-                        ),
-                        center = androidx.compose.ui.geometry.Offset(w * o3X, h * o3Y),
-                        radius = w * 0.5f
-                    )
-                } else if (!darkTheme) {
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                accentOrbColor.copy(alpha = 0.18f),
-                                accentOrbColor.copy(alpha = 0f)
-                            ),
-                            center = androidx.compose.ui.geometry.Offset(w * o1X, h * o1Y),
-                            radius = w * 0.75f
-                        ),
-                        center = androidx.compose.ui.geometry.Offset(w * o1X, h * o1Y),
-                        radius = w * 0.75f
-                    )
-                    
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFFECFDF5).copy(alpha = 0.6f),
-                                Color(0xFFECFDF5).copy(alpha = 0f)
-                            ),
-                            center = androidx.compose.ui.geometry.Offset(w * o2X, h * o2Y),
-                            radius = w * 0.65f
-                        ),
-                        center = androidx.compose.ui.geometry.Offset(w * o2X, h * o2Y),
-                        radius = w * 0.65f
-                    )
-
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFFFFF1F2).copy(alpha = 0.7f),
-                                Color(0xFFFFF1F2).copy(alpha = 0f)
-                            ),
-                            center = androidx.compose.ui.geometry.Offset(w * o3X, h * o3Y),
-                            radius = w * 0.6f
-                        ),
-                        center = androidx.compose.ui.geometry.Offset(w * o3X, h * o3Y),
-                        radius = w * 0.6f
-                    )
-                }
-            }
     ) {
+        if (!isPureBlack) {
+            AmbientOrbs(
+                accentColor = animatedAccent,
+                darkTheme = darkTheme
+            )
+        }
+
         content()
     }
+}
+
+@Composable
+private fun AmbientOrbs(
+    accentColor: Color,
+    darkTheme: Boolean
+) {
+    // Primary Top-Start Ambient Aura Glow (GPU RenderNode cached, zero continuous redraws)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(1.25f)
+            .aspectRatio(1f)
+            .graphicsLayer {
+                translationX = -90f
+                translationY = -70f
+                alpha = if (darkTheme) 0.36f else 0.22f
+            }
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(
+                        accentColor,
+                        accentColor.copy(alpha = 0f)
+                    )
+                ),
+                shape = CircleShape
+            )
+    )
+
+    // Secondary Bottom-End Ambient Mood Glow
+    val secondaryColor = if (darkTheme) Color(0xFF38BDF8) else Color(0xFF818CF8)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(1.05f)
+            .aspectRatio(1f)
+            .graphicsLayer {
+                translationX = 130f
+                translationY = 240f
+                alpha = if (darkTheme) 0.20f else 0.12f
+            }
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(
+                        secondaryColor,
+                        secondaryColor.copy(alpha = 0f)
+                    )
+                ),
+                shape = CircleShape
+            )
+    )
 }
