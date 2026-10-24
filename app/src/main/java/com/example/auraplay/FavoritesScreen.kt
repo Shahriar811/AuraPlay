@@ -1,5 +1,7 @@
 package com.example.auraplay.ui
 
+import com.example.auraplay.ui.MotionIconButton as IconButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.auraplay.MainViewModel
 import com.example.auraplay.data.Song
@@ -24,7 +27,7 @@ fun FavoritesScreen(
     viewModel: MainViewModel,
     onSongSelected: (Song) -> Unit
 ) {
-    val favoriteSongs by viewModel.favoriteSongs.collectAsState()
+    val favoriteSongs by viewModel.favoriteSongs.collectAsStateWithLifecycle()
     val glassColors = glassCardColors()
 
     Scaffold(
@@ -33,7 +36,7 @@ fun FavoritesScreen(
             TopAppBar(
                 title = { 
                     Text(
-                        "Favorite Songs",
+                        "Liked Songs",
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleLarge,
                         color = glassColors.textColor
@@ -63,7 +66,7 @@ fun FavoritesScreen(
                         modifier = Modifier.size(64.dp)
                     )
                     Text(
-                        "No favorite songs yet",
+                        "No liked songs yet",
                         style = MaterialTheme.typography.bodyLarge,
                         color = glassColors.subTextColor
                     )
@@ -79,7 +82,7 @@ fun FavoritesScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(bottom = 100.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 items(
@@ -91,6 +94,8 @@ fun FavoritesScreen(
                         song = song,
                         onSongSelected = { onSongSelected(song) },
                         trailingContent = {
+                            Row {
+                            com.example.auraplay.features.FeatureSongMenu(song, navController, viewModel)
                             IconButton(
                                 onClick = { viewModel.toggleFavorite(song) },
                                 modifier = Modifier.size(40.dp)
@@ -101,6 +106,7 @@ fun FavoritesScreen(
                                     tint = glassColors.accentColor
                                 )
                             }
+                        }
                         }
                     )
                 }

@@ -1,5 +1,7 @@
 package com.example.auraplay
 
+import com.example.auraplay.ui.MotionIconButton as IconButton
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,24 +25,26 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.auraplay.ui.glassCardColors
 import com.example.auraplay.ui.glassmorphic
-import com.example.auraplay.ui.resolveAccentColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(navController: NavController, viewModel: MainViewModel) {
-    val darkTheme by viewModel.darkTheme.collectAsState()
-    val accentTheme by viewModel.accentTheme.collectAsState()
-    val isPureBlack by viewModel.pureBlack.collectAsState()
-    val filterShortAudio by viewModel.filterShortAudio.collectAsState()
+    val darkTheme by viewModel.darkTheme.collectAsStateWithLifecycle()
+    val accentTheme by viewModel.accentTheme.collectAsStateWithLifecycle()
+    val isPureBlack by viewModel.pureBlack.collectAsStateWithLifecycle()
+    val filterShortAudio by viewModel.filterShortAudio.collectAsStateWithLifecycle()
 
-    val currentAccent = resolveAccentColor(accentTheme)
+    val currentAccent = MaterialTheme.colorScheme.primary
     val glassColors = glassCardColors(
         customAccent = currentAccent,
         isPureBlack = isPureBlack
     )
+
+    val visualizerEnabled by viewModel.visualizerEnabled.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
 
@@ -153,7 +157,8 @@ fun SettingsScreen(navController: NavController, viewModel: MainViewModel) {
                     Spacer(modifier = Modifier.height(14.dp))
 
                     val palettes = listOf(
-                        "DYNAMIC" to ("Dynamic Aura" to Color(0xFFC084FC)),
+                        "DYNAMIC" to ("Album artwork" to Color(0xFFC084FC)),
+                        "MINT" to ("Soft Green" to Color(0xFFC4E6BB)),
                         "PURPLE" to ("Amethyst" to Color(0xFFC084FC)),
                         "CYAN" to ("Cyber Cyan" to Color(0xFF38BDF8)),
                         "SUNSET" to ("Sunset Coral" to Color(0xFFFB923C)),
@@ -194,7 +199,7 @@ fun SettingsScreen(navController: NavController, viewModel: MainViewModel) {
                                         text = name,
                                         fontSize = 12.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) color else glassColors.textColor
+                                        color = glassColors.textColor
                                     )
                                 }
                             }
@@ -205,6 +210,15 @@ fun SettingsScreen(navController: NavController, viewModel: MainViewModel) {
 
             // Audio & Playback Section
             SettingsCategoryTitle("Audio & Playback", glassColors.subTextColor)
+
+            SettingsLink(Icons.Rounded.Tune, "Playback options", "Resume, crossfade and ReplayGain") { navController.navigate("playback_options") }
+
+            SettingsToggleCard(
+                icon = Icons.Rounded.GraphicEq, title = "Player animation",
+                subtitle = "Show the animated waveform during playback",
+                isChecked = visualizerEnabled, onCheckedChange = viewModel::setVisualizerEnabled,
+                glassColors = glassColors
+            )
 
             // Equalizer Section
             Box(
@@ -274,6 +288,10 @@ fun SettingsScreen(navController: NavController, viewModel: MainViewModel) {
             )
 
             // Library Rescan
+            SettingsCategoryTitle("Library & backup", glassColors.subTextColor)
+            SettingsLink(Icons.Rounded.Folder, "Music folders", "Choose folders to include or hide") { navController.navigate("music_folders") }
+            SettingsLink(Icons.Rounded.Backup, "Backup & restore", "Playlists, likes, edits, history and settings") { navController.navigate("backup") }
+            SettingsLink(Icons.Rounded.Widgets, "Widget styles", "Compact, large and artwork layouts") { navController.navigate("widget_styles") }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -332,6 +350,15 @@ fun SettingsScreen(navController: NavController, viewModel: MainViewModel) {
 
             Spacer(modifier = Modifier.height(20.dp))
         }
+    }
+}
+
+@Composable
+private fun SettingsLink(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+        ListItem(headlineContent = { Text(title, fontWeight = FontWeight.SemiBold) },
+            supportingContent = { Text(subtitle) }, leadingContent = { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) },
+            trailingContent = { Icon(Icons.Rounded.ChevronRight, null) }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
     }
 }
 

@@ -1,20 +1,28 @@
 package com.example.auraplay
 
+import com.example.auraplay.features.*
+import android.net.Uri
+import kotlinx.coroutines.withContext
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
+import java.util.Locale
 import android.app.Application
 import android.app.PendingIntent
 import android.content.ContentUris
 import android.os.Build
 import android.provider.MediaStore
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.auraplay.data.*
 import com.example.auraplay.service.MusicService
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -26,13 +34,16 @@ enum class SortOrder {
 class MainViewModel(
     application: Application,
     private val playlistDao: PlaylistDao,
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    val featureDao: FeatureDao = (application as AuraPlayApplication).database.featureDao()
 ) : AndroidViewModel(application) {
 
-    private val _deletePendingIntent = MutableSharedFlow<PendingIntent>()
-    val deletePendingIntent = _deletePendingIntent.asSharedFlow()
+    private val deleteIntentChannel = Channel<PendingIntent>(Channel.BUFFERED)
+    val deletePendingIntent = deleteIntentChannel.receiveAsFlow()
+    private val legacyDeleteChannel = Channel<Unit>(Channel.BUFFERED)
+    val legacyDeletePermission = legacyDeleteChannel.receiveAsFlow()
 
-    var pendingDeleteSong: Song? = null
+    @Volatile private var pendingDeleteSong: Song? = null
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
@@ -47,18 +58,20 @@ class MainViewModel(
     val isLyricsLoading = _isLyricsLoading.asStateFlow()
 
     private var loadLyricsJob: Job? = null
+    private var lyricsRequest = 0
 
     init {
         // Automatically load synced lyrics whenever active song changes
         viewModelScope.launch {
             MusicService.playerState
-                .map { it.currentSong }
-                .distinctUntilChangedBy { it?.id }
-                .collect { song ->
-                    if (song != null) {
+                .map { it.currentSong?.id }
+                .distinctUntilChanged()
+                .collectLatest { id ->
+                    if (id != null) {
+                        val song = playlistDao.getSongById(id).first() ?: MusicService.playerState.value.currentSong
                         loadLyrics(song, forceRefresh = false)
                     } else {
-                        _currentLyrics.value = SongLyrics()
+                        loadLyrics(null)
                     }
                 }
         }
@@ -69,7 +82,7 @@ class MainViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val accentTheme: StateFlow<String> = settingsDataStore.accentThemeFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "DYNAMIC")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "MINT")
 
     val pureBlack: StateFlow<Boolean> = settingsDataStore.pureBlackFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -80,29 +93,108 @@ class MainViewModel(
     val playbackSpeed: StateFlow<Float> = settingsDataStore.playbackSpeedFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
 
+    val visualizerEnabled = settingsDataStore.visualizerEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun setVisualizerEnabled(enabled: Boolean) = viewModelScope.launch {
+        settingsDataStore.saveVisualizerEnabled(enabled)
+    }
+
     val sleepTimerState = MusicService.sleepTimerState
 
-    val songs: StateFlow<List<Song>> =
-        combine(playlistDao.getAllSongs(), _searchQuery, _sortOrder, filterShortAudio) { songsFromDb, query, order, filterShort ->
-            val baseSongs = if (filterShort) {
-                songsFromDb.filter { it.duration >= 30_000L }
-            } else {
-                songsFromDb
-            }
+    // A single Room observer feeds every library view, instead of six simultaneous scans.
+    val librarySongs = playlistDao.getAllSongs().distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val featureSettings = settingsDataStore.featureSettingsFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, FeatureSettings())
+    val listeningEvents = featureDao.listeningEvents().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val bookmarks = featureDao.bookmarks().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val visibleLibrary = combine(librarySongs, featureSettings, filterShortAudio) { library, features, short ->
+        library.filter { folderAllowed(it.folderPath, features) && (!short || it.duration >= 30_000L) }
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val queueRequests = Channel<Pair<Song, Boolean>>(Channel.BUFFERED)
+    private val _featureMessage = MutableStateFlow<String?>(null)
+    val featureMessage = _featureMessage.asStateFlow()
+    private val _featureBusy = MutableStateFlow(false)
+    val featureBusy = _featureBusy.asStateFlow()
+
+    val allFolders = librarySongs.map(::groupFolders).flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    fun smartPlaylist(mode: SmartPlaylist): Flow<List<Song>> = combine(visibleLibrary, listeningEvents) { library, events ->
+        smartSongs(mode, library, events, System.currentTimeMillis())
+    }.flowOn(Dispatchers.Default)
+    fun showFeatureMessage(message: String) { _featureMessage.value = message }
+    fun clearFeatureMessage() { _featureMessage.value = null }
+    fun changeFeatures(change: (FeatureSettings) -> FeatureSettings) = viewModelScope.launch {
+        settingsDataStore.updateFeatures(change)
+    }
+    fun enqueue(song: Song, next: Boolean) = viewModelScope.launch { queueRequests.send(song to next) }
+    fun bookmarksForSong(id: Long) = featureDao.bookmarksForSong(id)
+    fun addBookmark(songId: Long, position: Long, label: String) = viewModelScope.launch(Dispatchers.IO) {
+        try {
+            val song = playlistDao.getSongById(songId).first() ?: error("This song is no longer in your library.")
+            featureDao.addBookmark(AudioBookmark(songId = songId, positionMs = position.coerceIn(0, song.duration.coerceAtLeast(0)), label = label.trim().take(120).ifBlank { "Bookmark" }))
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { _featureMessage.value = "Could not save the bookmark. Check that the song is still available." }
+    }
+    fun deleteBookmark(bookmark: AudioBookmark) = viewModelScope.launch(Dispatchers.IO) { featureDao.deleteBookmark(bookmark) }
+    fun saveSongInfo(song: Song, title: String, artist: String, album: String, cover: Uri?, onSaved: () -> Unit) = viewModelScope.launch {
+        _featureBusy.value = true
+        try {
+            withContext(Dispatchers.IO) {
+                val artwork = cover?.let { CoverStore.save(getApplication(), it) } ?: song.albumArtUri
+                val edit = SongEdit(song.id, title.trim().take(2000).ifBlank { song.title }, artist.trim().take(2000).ifBlank { "Unknown Artist" }, album.trim().take(2000).ifBlank { "Unknown Album" }, artwork)
+                featureDao.saveEdit(edit)
+                playlistDao.updateMetadata(song.id, edit.title, edit.artist, edit.album, song.albumId, artwork, song.duration, song.data, song.folderPath, song.dateAdded)
+            }
+            playlistDao.getSongById(song.id).first()?.let { MusicService.refreshMetadata(it) }
+            onSaved()
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { _featureMessage.value = error.message ?: "Could not save song information." }
+        finally { _featureBusy.value = false }
+    }
+    fun resetSongInfo(song: Song) = viewModelScope.launch(Dispatchers.IO) { featureDao.deleteEdit(song.id); refreshSongs() }
+    fun exportBackup(uri: Uri) = runFeatureOperation {
+        BackupManager(getApplication(), settingsDataStore).export(uri)
+        "Backup saved."
+    }
+    fun importBackup(uri: Uri) = runFeatureOperation {
+        val result = BackupManager(getApplication(), settingsDataStore).restore(uri)
+        val equalizer = settingsDataStore.equalizerFlow.first()
+        withContext(Dispatchers.Main) { MusicService.applyEqualizer(equalizer) }
+        result
+    }
+    private fun runFeatureOperation(action: suspend () -> String) = viewModelScope.launch {
+        if (_featureBusy.value) return@launch
+        _featureBusy.value = true
+        try { _featureMessage.value = withContext(Dispatchers.IO) { action() } }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { _featureMessage.value = error.message ?: "The operation could not be completed." }
+        finally { _featureBusy.value = false }
+    }
+
+    private val _isScanning = MutableStateFlow(false)
+    val isScanning = _isScanning.asStateFlow()
+    private val _scanError = MutableStateFlow<String?>(null)
+    val scanError = _scanError.asStateFlow()
+
+    val songs: StateFlow<List<Song>> =
+        combine(visibleLibrary, _searchQuery, _sortOrder) { songsFromDb, query, order ->
             val filteredSongs = if (query.isBlank()) {
-                baseSongs
+                songsFromDb
             } else {
-                baseSongs.filter {
+                songsFromDb.filter {
                     it.title.contains(query, ignoreCase = true) ||
                             it.artist.contains(query, ignoreCase = true) ||
                             it.album.contains(query, ignoreCase = true)
                 }
             }
             when (order) {
-                SortOrder.TITLE -> filteredSongs.sortedBy { it.title }
-                SortOrder.ARTIST -> filteredSongs.sortedBy { it.artist }
-                SortOrder.DATE_ADDED -> filteredSongs.sortedByDescending { it.id }
+                SortOrder.TITLE -> filteredSongs.sortedBy { it.title.lowercase(Locale.ROOT) }
+                SortOrder.ARTIST -> filteredSongs.sortedBy { it.artist.lowercase(Locale.ROOT) }
+                SortOrder.DATE_ADDED -> filteredSongs.sortedWith(compareByDescending<Song> { it.dateAdded }.thenByDescending { it.id })
             }
         }
         .flowOn(Dispatchers.Default)
@@ -110,44 +202,52 @@ class MainViewModel(
 
     // Library collections
     val playlists = playlistDao.getAllPlaylists().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val favoriteSongs = playlistDao.getFavoriteSongs().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val albums = playlistDao.getAllAlbums().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val artists = playlistDao.getAllArtists().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val recentlyPlayed = playlistDao.getRecentlyPlayedSongs().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val mostPlayed = playlistDao.getMostPlayedSongs().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val albums = songs.map(::groupAlbums).flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val artists = songs.map(::groupArtists).flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val folders = songs.map(::groupFolders).flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val favoriteSongs = visibleLibrary.map { tracks -> tracks.filter { it.isFavorite }.sortedBy { it.title.lowercase(Locale.ROOT) } }
+        .flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val recentlyPlayed = visibleLibrary.map { tracks -> tracks.filter { it.lastPlayedTimestamp > 0 }.sortedByDescending { it.lastPlayedTimestamp }.take(30) }
+        .flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val mostPlayed = visibleLibrary.map { tracks -> tracks.filter { it.playCount > 0 }.sortedByDescending { it.playCount }.take(30) }
+        .flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Folders computed flow on Dispatchers.Default with fast string parsing
-    val folders: StateFlow<List<FolderItem>> = playlistDao.getAllSongs().map { allSongs ->
-        allSongs.groupBy { it.folderPath }.mapNotNull { (path, songList) ->
-            if (path.isBlank()) null else {
-                val folderName = path.substringAfterLast(File.separatorChar).takeIf { it.isNotBlank() }
-                    ?: path.substringAfterLast('/').takeIf { it.isNotBlank() }
-                    ?: path
-                FolderItem(
-                    folderPath = path,
-                    folderName = folderName,
-                    songCount = songList.size
-                )
-            }
-        }.sortedBy { it.folderName }
-    }
-    .flowOn(Dispatchers.Default)
-    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    fun getCollectionSongs(collection: LibraryCollection): Flow<List<Song>> = combine(when (collection.type) {
+        "album" -> playlistDao.getSongsByAlbumId(collection.key.toLong(), collection.name)
+        "artist" -> playlistDao.getSongsByArtist(collection.key)
+        else -> playlistDao.getSongsByFolder(collection.key)
+    }, filterShortAudio, featureSettings) { tracks, filter, features -> tracks.filter { (!filter || it.duration >= 30_000L) && folderAllowed(it.folderPath, features) } }
 
-    fun getPlaylistWithSongs(playlistId: Long) = playlistDao.getPlaylistWithSongs(playlistId)
+    fun getPlaylistWithSongs(playlistId: Long) = combine(playlistDao.getPlaylistWithSongs(playlistId), filterShortAudio, featureSettings) { list, short, features ->
+        list?.copy(songs = list.songs.filter { (!short || it.duration >= 30_000L) && folderAllowed(it.folderPath, features) })
+    }.flowOn(Dispatchers.Default)
     fun getSongById(songId: Long) = playlistDao.getSongById(songId)
     fun getSongsByAlbum(album: String) = playlistDao.getSongsByAlbum(album)
     fun getSongsByArtist(artist: String) = playlistDao.getSongsByArtist(artist)
     fun getSongsByFolder(folderPath: String) = playlistDao.getSongsByFolder(folderPath)
 
-    val showPlaylistDialog = mutableStateOf<Song?>(null)
-
-    private val isRefreshing = java.util.concurrent.atomic.AtomicBoolean(false)
-    private var refreshJob: Job? = null
-
     init {
-        // Defer initial MediaStore sync by 3 seconds so cold start renders instantly from local Room DB with zero I/O contention
-        refreshSongs(delayMs = 3000L)
+        viewModelScope.launch {
+            combine(librarySongs, settingsDataStore.playbackSnapshotFlow.distinctUntilChanged(), featureSettings) { library, json, features ->
+                if (MusicService.getInstance() != null) null
+                else {
+                    val snapshot = if (features.resumePlayback) PlaybackSnapshot.decode(json) else null
+                    resumePreviewState(snapshot?.let { restoreQueue(it.ids, it.index, it.position, library, it.order) }, snapshot)
+                }
+            }.flowOn(Dispatchers.Default).collect { preview ->
+                preview?.let(MusicService::publishResumePreview)
+            }
+        }
+    }
+
+    private var refreshJob: Job? = null
+    @Volatile private var libraryScanned = false
+
+    fun ensureLibraryLoaded() {
+        if (!libraryScanned) refreshSongs(force = false)
     }
 
     fun toggleTheme() {
@@ -210,33 +310,32 @@ class MainViewModel(
     }
 
     fun loadLyrics(song: Song?, forceRefresh: Boolean = false) {
-        if (song == null) {
-            _currentLyrics.value = SongLyrics()
-            return
-        }
+        val request = ++lyricsRequest
         loadLyricsJob?.cancel()
+        _currentLyrics.value = SongLyrics()
+        _isLyricsLoading.value = false
+        if (song == null) return
         loadLyricsJob = viewModelScope.launch {
             _isLyricsLoading.value = true
-            val lyrics = LyricsManager.getLyricsForSong(song, playlistDao, forceRefresh)
-            _currentLyrics.value = lyrics
-            _isLyricsLoading.value = false
+            try {
+                _currentLyrics.value = LyricsManager.getLyricsForSong(song, playlistDao, forceRefresh)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                android.util.Log.e("MainViewModel", "Could not load lyrics", error)
+            } finally {
+                if (request == lyricsRequest) _isLyricsLoading.value = false
+            }
         }
     }
 
-    fun refreshSongs(delayMs: Long = 0L) {
-        refreshJob?.cancel()
+    fun refreshSongs(force: Boolean = true) {
+        if (refreshJob?.isActive == true) return
+        val context = getApplication<Application>().applicationContext
+        val permission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
+        if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) return
         refreshJob = viewModelScope.launch(Dispatchers.IO) {
-            if (delayMs > 0L) {
-                delay(delayMs)
-            }
-            if (!isRefreshing.compareAndSet(false, true)) return@launch
-
-            try {
-                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
-            } catch (e: Exception) {
-                // Safety
-            }
-
+            _scanError.value = null
             val songsList = mutableListOf<Song>()
             val projection = arrayOf(
                 MediaStore.Audio.Media._ID,
@@ -245,13 +344,18 @@ class MainViewModel(
                 MediaStore.Audio.Media.ALBUM,
                 MediaStore.Audio.Media.ALBUM_ID,
                 MediaStore.Audio.Media.DURATION,
-                MediaStore.Audio.Media.DATA
+                MediaStore.Audio.Media.DATA,
+                MediaStore.Audio.Media.DATE_ADDED
             )
             val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
             val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC"
-            val context = getApplication<Application>().applicationContext
-
             try {
+                val startStamp = mediaStoreScanStamp(context)
+                if (!force && canReuseLibraryScan(startStamp, settingsDataStore.libraryScanStampFlow.first(), playlistDao.hasCachedSongs())) {
+                    libraryScanned = true
+                    return@launch
+                }
+                _isScanning.value = true
                 context.contentResolver.query(
                     MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                     projection,
@@ -266,8 +370,10 @@ class MainViewModel(
                     val albumIdColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID)
                     val durationColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DURATION)
                     val dataColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
+                    val dateAddedColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DATE_ADDED)
 
                     while (cursor.moveToNext()) {
+                        ensureActive()
                         val id = if (idColumn >= 0) cursor.getLong(idColumn) else continue
                         val title = (if (titleColumn >= 0) cursor.getString(titleColumn) else null) ?: "Unknown Title"
                         val artist = (if (artistColumn >= 0) cursor.getString(artistColumn) else null) ?: "Unknown Artist"
@@ -297,12 +403,14 @@ class MainViewModel(
                                 albumArtUri = albumArtUri,
                                 duration = duration,
                                 data = data,
-                                folderPath = folderPath
+                                folderPath = folderPath,
+                                dateAdded = if (dateAddedColumn >= 0) cursor.getLong(dateAddedColumn) else 0L
                             )
                         )
                     }
-                }
+                } ?: throw IllegalStateException("MediaStore query returned no cursor")
 
+                ensureActive()
                 // Reconcile with Room DB atomically without invalidation thrashing
                 val existingSongs = playlistDao.getAllSongsList()
                 val existingMap = existingSongs.associateBy { it.id }
@@ -326,7 +434,7 @@ class MainViewModel(
                                 existing.albumArtUri != song.albumArtUri ||
                                 existing.duration != song.duration ||
                                 existing.data != song.data ||
-                                existing.folderPath != song.folderPath
+                                existing.folderPath != song.folderPath || existing.dateAdded != song.dateAdded
 
                         if (metadataChanged) {
                             val merged = song.copy(
@@ -342,10 +450,21 @@ class MainViewModel(
                 if (deletedIds.isNotEmpty() || toInsert.isNotEmpty() || toUpdate.isNotEmpty()) {
                     playlistDao.syncSongs(toInsert = toInsert, toUpdate = toUpdate, toDelete = deletedIds)
                 }
+                // Never bless a partial scan if storage changed while the cursor was being read.
+                val endStamp = mediaStoreScanStamp(context)
+                try {
+                    settingsDataStore.saveLibraryScanStamp(startStamp?.takeIf { it == endStamp }.orEmpty())
+                } catch (error: java.io.IOException) {
+                    android.util.Log.w("MainViewModel", "Library cache marker could not be saved", error)
+                }
+                libraryScanned = true
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
+                _scanError.value = "Could not refresh your music. Check audio permission and try again."
                 android.util.Log.e("MainViewModel", "Error refreshing songs from MediaStore", e)
             } finally {
-                isRefreshing.set(false)
+                _isScanning.value = false
             }
         }
     }
@@ -353,11 +472,11 @@ class MainViewModel(
     // --- Playlist & Favorite Management ---
 
     fun toggleFavorite(song: Song) = viewModelScope.launch(Dispatchers.IO) {
-        playlistDao.setFavorite(song.id, !song.isFavorite)
+        playlistDao.toggleFavorite(song.id)
     }
 
     fun createPlaylist(name: String) = viewModelScope.launch(Dispatchers.IO) {
-        playlistDao.insertPlaylist(Playlist(name = name))
+        if (name.isNotBlank()) playlistDao.insertPlaylist(Playlist(name = name.trim()))
     }
 
     fun deletePlaylist(playlist: Playlist) = viewModelScope.launch(Dispatchers.IO) {
@@ -365,7 +484,7 @@ class MainViewModel(
     }
 
     fun renamePlaylist(playlist: Playlist, newName: String) = viewModelScope.launch(Dispatchers.IO) {
-        playlistDao.updatePlaylist(playlist.copy(name = newName))
+        if (newName.isNotBlank()) playlistDao.updatePlaylist(playlist.copy(name = newName.trim()))
     }
 
     fun addSongToPlaylist(song: Song, playlist: Playlist) = viewModelScope.launch(Dispatchers.IO) {
@@ -384,62 +503,75 @@ class MainViewModel(
     }
 
     fun deleteSong(song: Song) = viewModelScope.launch(Dispatchers.IO) {
+        if (pendingDeleteSong != null) return@launch
+        pendingDeleteSong = song
         val context = getApplication<Application>().applicationContext
         val resolver = context.contentResolver
-        val songUri = ContentUris.withAppendedId(
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-            song.id
-        )
-        pendingDeleteSong = song
-
+        val songUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, song.id)
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                val pendingIntent = MediaStore.createDeleteRequest(resolver, listOf(songUri))
-                _deletePendingIntent.emit(pendingIntent)
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (Build.VERSION.SDK_INT <= 28 &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                legacyDeleteChannel.send(Unit)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                deleteIntentChannel.send(MediaStore.createDeleteRequest(resolver, listOf(songUri)))
+            } else {
                 try {
                     resolver.delete(songUri, null, null)
-                    playlistDao.deleteSong(song)
+                    playlistDao.deleteSongWithLyrics(song)
                     pendingDeleteSong = null
-                } catch (securityException: SecurityException) {
-                    val recoverableSecurityException = securityException as? android.app.RecoverableSecurityException
-                    recoverableSecurityException?.userAction?.actionIntent?.let {
-                        _deletePendingIntent.emit(it)
-                    }
+                } catch (error: SecurityException) {
+                    if (Build.VERSION.SDK_INT >= 29 && error is android.app.RecoverableSecurityException) {
+                        deleteIntentChannel.send(error.userAction.actionIntent)
+                    } else throw error
                 }
-            } else {
-                resolver.delete(songUri, null, null)
-                playlistDao.deleteSong(song)
-                pendingDeleteSong = null
             }
-        } catch (e: Exception) {
-            android.util.Log.e("MainViewModel", "Error deleting song from storage", e)
-            playlistDao.deleteSong(song)
+        } catch (cancelled: CancellationException) {
+            pendingDeleteSong = null
+            throw cancelled
+        } catch (error: Exception) {
+            android.util.Log.e("MainViewModel", "Error deleting song from storage", error)
+            _scanError.value = "The song could not be deleted. It is still in your library."
             pendingDeleteSong = null
         }
     }
 
+    fun continueLegacyDelete(granted: Boolean) {
+        val song = pendingDeleteSong
+        pendingDeleteSong = null
+        if (granted && song != null) deleteSong(song)
+        else _scanError.value = "Storage permission is needed to delete this song."
+    }
+
     fun confirmPendingDelete() = viewModelScope.launch(Dispatchers.IO) {
-        pendingDeleteSong?.let { song ->
-            playlistDao.deleteSong(song)
-            pendingDeleteSong = null
-        }
+        val song = pendingDeleteSong ?: return@launch
+        try {
+            // Android 10 grants consent to retry; Android 11+ performs the deletion itself.
+            if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
+                val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, song.id)
+                getApplication<Application>().contentResolver.delete(uri, null, null)
+            }
+            playlistDao.deleteSongWithLyrics(song)
+        } catch (error: Exception) {
+            _scanError.value = "Could not finish deleting this song. Refresh your library and try again."
+        } finally { pendingDeleteSong = null }
     }
 
     fun cancelPendingDelete() {
         pendingDeleteSong = null
     }
+
 }
 
 class MainViewModelFactory(
     private val application: Application,
     private val playlistDao: PlaylistDao,
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val featureDao: FeatureDao? = null
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MainViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return MainViewModel(application, playlistDao, settingsDataStore) as T
+            return MainViewModel(application, playlistDao, settingsDataStore, featureDao ?: (application as AuraPlayApplication).database.featureDao()) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

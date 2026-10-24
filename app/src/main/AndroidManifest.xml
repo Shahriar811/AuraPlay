@@ -4,6 +4,7 @@
 
     <!-- Permissions for reading audio files -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <!-- Permission for online lyrics and network -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -47,6 +48,9 @@
         </service>
 
         <!-- Declare the App Widget -->
+        <activity android:name=".widget.WidgetConfigActivity" android:exported="true">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" /></intent-filter>
+        </activity>
         <receiver
             android:name=".widget.AuraPlayAppWidgetProvider"
             android:exported="true">

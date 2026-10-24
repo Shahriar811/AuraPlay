@@ -1,5 +1,8 @@
 package com.example.auraplay.ui
 
+import com.example.auraplay.ui.MotionIconButton as IconButton
+import com.example.auraplay.ui.MotionFloatingActionButton as FloatingActionButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -8,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -15,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.auraplay.MainViewModel
 import com.example.auraplay.data.Song
@@ -27,7 +32,7 @@ fun PlaylistDetailsScreen(
     viewModel: MainViewModel,
     onSongSelected: (Song) -> Unit
 ) {
-    val playlistWithSongs by viewModel.getPlaylistWithSongs(playlistId).collectAsState(initial = null)
+    val playlistWithSongs by remember(playlistId) { viewModel.getPlaylistWithSongs(playlistId) }.collectAsStateWithLifecycle(initialValue = null)
     val glassColors = glassCardColors()
 
     Scaffold(
@@ -61,12 +66,12 @@ fun PlaylistDetailsScreen(
                 onClick = { navController.navigate("add_songs/$playlistId") },
                 shape = CircleShape,
                 containerColor = glassColors.accentColor,
-                modifier = Modifier.padding(bottom = 80.dp) // Offset above bottom floating dock
+                modifier = Modifier.padding(bottom = 8.dp)
             ) {
                 Icon(
                     Icons.Rounded.Add, 
                     contentDescription = "Add Songs",
-                    tint = Color.White
+                    tint = MaterialTheme.colorScheme.onPrimary
                 )
             }
         }
@@ -106,7 +111,7 @@ fun PlaylistDetailsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 playlistWithSongs?.let { playlistData ->
@@ -119,6 +124,8 @@ fun PlaylistDetailsScreen(
                             song = song,
                             onSongSelected = { onSongSelected(song) },
                             trailingContent = {
+                            Row {
+                            com.example.auraplay.features.FeatureSongMenu(song, navController, viewModel)
                                 IconButton(
                                     onClick = {
                                         viewModel.removeSongFromPlaylist(song, playlistData.playlist)
@@ -132,6 +139,7 @@ fun PlaylistDetailsScreen(
                                     )
                                 }
                             }
+                        }
                         )
                     }
                 }

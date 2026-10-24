@@ -1,5 +1,9 @@
 package com.example.auraplay.ui
 
+import com.example.auraplay.ui.MotionIconButton as IconButton
+import com.example.auraplay.ui.MotionTextButton as TextButton
+import com.example.auraplay.ui.MotionFloatingActionButton as FloatingActionButton
+
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.auraplay.MainViewModel
 import com.example.auraplay.data.Playlist
@@ -25,9 +30,8 @@ import com.example.auraplay.data.Playlist
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistScreen(navController: NavController, viewModel: MainViewModel) {
-    val playlists by viewModel.playlists.collectAsState()
+    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     var showCreateDialog by remember { mutableStateOf(false) }
-    var newPlaylistName by remember { mutableStateOf("") }
     val glassColors = glassCardColors()
 
     var playlistToRename by remember { mutableStateOf<Playlist?>(null) }
@@ -59,12 +63,12 @@ fun PlaylistScreen(navController: NavController, viewModel: MainViewModel) {
                     defaultElevation = 8.dp,
                     pressedElevation = 12.dp
                 ),
-                modifier = Modifier.padding(bottom = 80.dp) // Offset above bottom floating dock
+                modifier = Modifier.padding(bottom = 8.dp)
             ) {
                 Icon(
                     Icons.Rounded.Add, 
                     contentDescription = "Create Playlist",
-                    tint = Color.White
+                    tint = MaterialTheme.colorScheme.onPrimary
                 )
             }
         }
@@ -76,6 +80,18 @@ fun PlaylistScreen(navController: NavController, viewModel: MainViewModel) {
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            item {
+                Card(onClick = { navController.navigate("smart_playlists") }, modifier = Modifier.fillMaxWidth()) {
+                    ListItem(headlineContent = { Text("Smart playlists", fontWeight = FontWeight.Bold) }, supportingContent = { Text("Discoveries, recent additions and weekly favorites") },
+                        leadingContent = { Icon(Icons.Rounded.AutoAwesome, null) }, trailingContent = { Icon(Icons.Rounded.ChevronRight, null) })
+                }
+            }
+            item {
+                Card(onClick = { navController.navigate("bookmarks") }, modifier = Modifier.fillMaxWidth()) {
+                    ListItem(headlineContent = { Text("Audio bookmarks", fontWeight = FontWeight.Bold) }, supportingContent = { Text("Return to your saved moments") },
+                        leadingContent = { Icon(Icons.Rounded.Bookmarks, null) }, trailingContent = { Icon(Icons.Rounded.ChevronRight, null) })
+                }
+            }
             items(
                 items = playlists,
                 key = { it.playlistId },
@@ -263,6 +279,7 @@ fun CreateRenameDialog(
 ) {
     var text by remember { mutableStateOf(initialValue) }
     val glassColors = glassCardColors()
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { 

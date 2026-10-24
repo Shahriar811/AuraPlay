@@ -12,38 +12,24 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlin.random.Random
 
 @Composable
 fun AudioVisualizer(
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
     barCount: Int = 32,
-    accentColor: Color = Color(0xFFC084FC),
-    secondaryColor: Color = Color(0xFF818CF8),
+    accentColor: Color = Color(0xFFC4E6BB),
+    secondaryColor: Color = Color(0xFFA9CDA4),
     height: Dp = 48.dp
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "visualizerAnim")
-
-    val phase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2 * Math.PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "phase"
-    )
-
-    val beatScale by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1.3f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(450, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "beatScale"
-    )
+    // Start the animation only while playing and read its state during drawing.
+    // Pausing no longer keeps an infinite animation or composition work alive.
+    val phase = remember { Animatable(0f) }
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) phase.animateTo((2 * Math.PI).toFloat(),
+            animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Restart))
+        else phase.snapTo(0f)
+    }
 
     Canvas(
         modifier = modifier
@@ -59,10 +45,10 @@ fun AudioVisualizer(
             val normalizedIndex = i.toFloat() / barCount
             
             val barHeight = if (isPlaying) {
-                val wave1 = Math.sin(phase.toDouble() + (normalizedIndex * 4.0)).toFloat()
-                val wave2 = Math.cos((phase * 1.6).toDouble() + (normalizedIndex * 7.0)).toFloat()
+                val wave1 = Math.sin(phase.value.toDouble() + (normalizedIndex * 4.0)).toFloat()
+                val wave2 = Math.cos((phase.value * 1.6).toDouble() + (normalizedIndex * 7.0)).toFloat()
                 val centerWeight = 1f - Math.abs(normalizedIndex - 0.5f) * 1.2f
-                val combined = ((wave1 * 0.5f + wave2 * 0.5f + 1f) / 2f) * beatScale * centerWeight
+                val combined = ((wave1 * 0.5f + wave2 * 0.5f + 1f) / 2f) * centerWeight
                 (combined.coerceIn(0.08f, 1.0f) * canvasHeight)
             } else {
                 canvasHeight * 0.08f

@@ -30,6 +30,7 @@ class EqualizerManager(private val audioSessionId: Int) {
             equalizer = Equalizer(0, audioSessionId).apply {
                 enabled = false
             }
+            _equalizerState.value = _equalizerState.value.copy(bandLevels = List(equalizer?.numberOfBands?.toInt() ?: 5) { 0 })
             bassBoost = BassBoost(0, audioSessionId).apply {
                 enabled = false
             }
@@ -89,13 +90,16 @@ class EqualizerManager(private val audioSessionId: Int) {
     }
 
     fun setBandLevel(band: Int, level: Int) {
+        if (band !in _equalizerState.value.bandLevels.indices) return
+        val range = getBandLevelRange() ?: intArrayOf(-1500, 1500)
+        val safeLevel = level.coerceIn(range[0], range[1])
         try {
             if (_equalizerState.value.isEnabled) {
-                equalizer?.setBandLevel(band.toShort(), level.toShort())
+                equalizer?.setBandLevel(band.toShort(), safeLevel.toShort())
             }
             val newLevels = _equalizerState.value.bandLevels.toMutableList()
             if (band < newLevels.size) {
-                newLevels[band] = level
+                newLevels[band] = safeLevel
                 _equalizerState.value = _equalizerState.value.copy(bandLevels = newLevels)
             }
         } catch (e: Exception) {
@@ -153,7 +157,7 @@ class EqualizerManager(private val audioSessionId: Int) {
 
     fun getCenterFreq(band: Int): Int {
         return try {
-            equalizer?.getCenterFreq(band.toShort())?.toInt() ?: 0
+            (equalizer?.getCenterFreq(band.toShort()) ?: 0) / 1000
         } catch (e: Exception) {
             0
         }
@@ -163,12 +167,22 @@ class EqualizerManager(private val audioSessionId: Int) {
         return equalizer?.bandLevelRange?.map { it.toInt() }?.toIntArray()
     }
 
+    fun resetBands() {
+        for (band in _equalizerState.value.bandLevels.indices) setBandLevel(band, 0)
+    }
+
+    fun restore(state: EqualizerState) {
+        setEnabled(false)
+        _equalizerState.value.bandLevels.indices.forEach { setBandLevel(it, state.bandLevels.getOrElse(it) { 0 }) }
+        setBassBoost(state.bassBoost.coerceIn(0, 1000))
+        setVirtualizer(state.virtualizer.coerceIn(0, 1000))
+        setReverbPreset(state.reverbPreset.coerceIn(0, 6))
+        setEnabled(state.isEnabled)
+    }
+
     fun reset() {
         try {
-            val numBands = getNumberOfBands()
-            for (i in 0 until numBands) {
-                setBandLevel(i, 0)
-            }
+            resetBands()
             setBassBoost(0)
             setVirtualizer(0)
             setReverbPreset(PresetReverb.PRESET_NONE.toInt())

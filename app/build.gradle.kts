@@ -13,8 +13,8 @@ android {
         applicationId = "com.example.auraplay"
         minSdk = 26
         targetSdk = 36 // Updated SDK version
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 4
+        versionName = "1.1.2"
 
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -22,12 +22,19 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
 
+        }
+        // Installable local build for measuring first-launch scrolling with release optimizations.
+        create("performance") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
         }
     }
     compileOptions {
@@ -46,6 +53,7 @@ dependencies {
     // Core & UI
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
 

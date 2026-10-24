@@ -31,16 +31,14 @@ data class SongLyrics(
 
 object LyricsManager {
 
-    private val TIME_TAG_PATTERN = Pattern.compile("\\[(\\d{2}):(\\d{2})(?:\\.(\\d{2,3}))?\\]")
+    private val TIME_TAG_PATTERN = Pattern.compile("\\[(\\d{2}):(\\d{2})(?:\\.(\\d{1,3}))?\\]")
 
     suspend fun getLyricsForSong(
         song: Song,
         playlistDao: PlaylistDao,
         forceRefresh: Boolean = false
     ): SongLyrics = withContext(Dispatchers.IO) {
-        if (forceRefresh) {
-            playlistDao.deleteLyricsForSong(song.id)
-        } else {
+        if (!forceRefresh) {
             // 1. Check local file storage (.lrc)
             val localLrc = loadLocalLrcFile(song.data)
             if (localLrc != null && localLrc.isSynced && localLrc.lines.isNotEmpty()) {
@@ -49,11 +47,12 @@ object LyricsManager {
 
             // 2. Check Room Database cache for valid synced lyrics
             val cached = playlistDao.getLyricsForSong(song.id)
-            if (cached != null && cached.isSynced && cached.syncedLyrics.isNotBlank()) {
-                val parsed = parseLrcContent(cached.syncedLyrics)
-                if (parsed.isSynced && parsed.lines.isNotEmpty()) {
-                    return@withContext parsed.copy(source = cached.source)
+            if (cached != null) {
+                if (cached.isSynced && cached.syncedLyrics.isNotBlank()) {
+                    val parsed = parseLrcContent(cached.syncedLyrics)
+                    if (parsed.isSynced && parsed.lines.isNotEmpty()) return@withContext parsed.copy(source = cached.source)
                 }
+                if (cached.plainLyrics.isNotBlank()) return@withContext SongLyrics(plainText = cached.plainLyrics, source = cached.source)
             }
         }
 
@@ -74,6 +73,10 @@ object LyricsManager {
 
         // 4. Fallback: If online search returns nothing (e.g. offline), use cached plain lyrics or local file
         val cachedFallback = playlistDao.getLyricsForSong(song.id)
+        if (cachedFallback?.isSynced == true && cachedFallback.syncedLyrics.isNotBlank()) {
+            val parsed = parseLrcContent(cachedFallback.syncedLyrics)
+            if (parsed.isSynced) return@withContext parsed.copy(source = cachedFallback.source)
+        }
         if (cachedFallback != null && cachedFallback.plainLyrics.isNotBlank()) {
             return@withContext SongLyrics(
                 isSynced = false,
@@ -253,60 +256,41 @@ object LyricsManager {
 
     fun parseLrcContent(content: String): SongLyrics {
         val lines = mutableListOf<LyricLine>()
-        var isSynced = false
-
-        content.lines().forEach { line ->
-            val trimmed = line.trim()
-            if (trimmed.isNotBlank()) {
-                val matcher = TIME_TAG_PATTERN.matcher(trimmed)
-                var foundTag = false
-                var lastEnd = 0
-                val timestamps = mutableListOf<Long>()
-
-                while (matcher.find()) {
-                    foundTag = true
-                    val minutes = matcher.group(1)?.toLongOrNull() ?: 0L
-                    val seconds = matcher.group(2)?.toLongOrNull() ?: 0L
-                    val millisStr = matcher.group(3) ?: "00"
-                    val millis = if (millisStr.length == 2) millisStr.toLong() * 10 else millisStr.toLong()
-                    val totalMs = (minutes * 60 + seconds) * 1000 + millis
-                    timestamps.add(totalMs)
-                    lastEnd = matcher.end()
-                }
-
-                if (foundTag) {
-                    isSynced = true
-                    val lyricText = trimmed.substring(lastEnd).trim()
-                    if (lyricText.isNotBlank()) {
-                        for (ts in timestamps) {
-                            lines.add(LyricLine(timeMs = ts, text = lyricText))
-                        }
-                    }
-                } else if (!trimmed.startsWith("[ti:") && !trimmed.startsWith("[ar:") && !trimmed.startsWith("[al:") && !trimmed.startsWith("[by:")) {
-                    lines.add(LyricLine(timeMs = 0L, text = trimmed))
-                }
+        val offset = Regex("\\[offset:([+-]?\\d+)\\]", RegexOption.IGNORE_CASE)
+            .find(content)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+        content.lineSequence().map(String::trim).filter(String::isNotEmpty).forEach { line ->
+            val matcher = TIME_TAG_PATTERN.matcher(line)
+            val timestamps = mutableListOf<Long>()
+            var lastEnd = 0
+            while (matcher.find()) {
+                val minutes = matcher.group(1)!!.toLong()
+                val seconds = matcher.group(2)!!.toLong()
+                val fraction = matcher.group(3).orEmpty().padEnd(3, '0').take(3).toLongOrNull() ?: 0L
+                timestamps.add(((minutes * 60 + seconds) * 1000 + fraction + offset).coerceAtLeast(0L))
+                lastEnd = matcher.end()
+            }
+            if (timestamps.isNotEmpty()) {
+                // Keep empty timestamped lines: they clear the previous lyric during instrumentals.
+                val text = line.substring(lastEnd).trim()
+                timestamps.forEach { lines.add(LyricLine(it, text)) }
             }
         }
-
-        val sortedLines = lines.sortedBy { it.timeMs }
-        return SongLyrics(
-            isSynced = isSynced,
-            lines = sortedLines,
-            plainText = if (isSynced) sortedLines.joinToString("\n") { it.text } else content,
-            rawLrc = if (isSynced) content else ""
-        )
+        val sorted = lines.sortedBy { it.timeMs }
+        return SongLyrics(isSynced = sorted.isNotEmpty(), lines = sorted,
+            plainText = if (sorted.isNotEmpty()) sorted.joinToString("\n") { it.text }
+                else content.lineSequence().filterNot { it.trim().startsWith("[") }.joinToString("\n").trim(),
+            rawLrc = if (sorted.isNotEmpty()) content else "")
     }
 
     fun getActiveLyricIndex(lyrics: List<LyricLine>, currentPositionMs: Long): Int {
-        if (lyrics.isEmpty()) return -1
-        var activeIndex = -1
-        for (i in lyrics.indices) {
-            if (lyrics[i].timeMs <= currentPositionMs) {
-                activeIndex = i
-            } else {
-                break
-            }
+        var low = 0
+        var high = lyrics.lastIndex
+        var active = -1
+        while (low <= high) {
+            val middle = (low + high) ushr 1
+            if (lyrics[middle].timeMs <= currentPositionMs) { active = middle; low = middle + 1 }
+            else high = middle - 1
         }
-        return activeIndex
+        return active
     }
 }

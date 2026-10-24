@@ -1,8 +1,14 @@
 package com.example.auraplay.ui
 
+import com.example.auraplay.ui.MotionIconButton as IconButton
+import com.example.auraplay.ui.MotionTextButton as TextButton
+
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
@@ -31,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.auraplay.EqualizerManager
 import com.example.auraplay.EqualizerState
@@ -42,7 +49,7 @@ fun EqualizerScreen(
     navController: NavController,
     equalizerManager: EqualizerManager?
 ) {
-    val equalizerState by equalizerManager?.equalizerState?.collectAsState() ?: remember { mutableStateOf(EqualizerState()) }
+    val equalizerState by equalizerManager?.equalizerState?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(EqualizerState()) }
     val isEnabled = equalizerState.isEnabled
     val glassColors = glassCardColors()
 
@@ -71,7 +78,7 @@ fun EqualizerScreen(
                     IconButton(onClick = { equalizerManager?.reset() }) {
                         Icon(
                             Icons.Rounded.Refresh,
-                            contentDescription = "Reset",
+                            contentDescription = "Reset all equalizer settings",
                             tint = glassColors.textColor
                         )
                     }
@@ -132,6 +139,7 @@ fun EqualizerScreen(
                         Switch(
                             checked = isEnabled,
                             onCheckedChange = { equalizerManager?.setEnabled(it) },
+                            enabled = equalizerManager != null,
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = glassColors.accentColor,
                                 checkedTrackColor = glassColors.accentColor.copy(alpha = 0.5f)
@@ -181,7 +189,7 @@ fun EqualizerScreen(
                                 tint = glassColors.textColor.copy(alpha = 0.2f)
                             )
                             Text(
-                                "Enable equalizer to customize audio",
+                                if (equalizerManager == null) "Start playback to connect the equalizer" else "Enable equalizer to customize audio",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = glassColors.subTextColor
                             )
@@ -217,25 +225,9 @@ fun FrequencyBandsSection(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(
-                    Icons.Rounded.Equalizer,
-                    contentDescription = null,
-                    tint = glassColors.accentColor,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    "Frequency Bands",
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = glassColors.textColor
-                )
-            }
-            
+            EffectSectionHeader("Frequency Bands", Icons.Rounded.Equalizer,
+                state.bandLevels.any { it != 0 }, equalizerManager::resetBands)
+
             // Frequency band sliders with scale
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -277,10 +269,10 @@ fun FrequencyBandsSection(
                 Row(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxHeight(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    for (band in 0 until numBands.coerceAtMost(5)) {
+                    for (band in 0 until numBands) {
                         FrequencyBandSlider(
                             band = band,
                             level = state.bandLevels.getOrElse(band) { 0 },
@@ -305,10 +297,10 @@ fun FrequencyBandSlider(
     centerFreq: Int,
     onLevelChange: (Int) -> Unit
 ) {
-    val density = LocalDensity.current
-    var currentLevel by remember(level) { mutableStateOf(level) }
+    val latestLevelChange by rememberUpdatedState(onLevelChange)
+    var currentLevel by remember { mutableIntStateOf(level) }
     var isDragging by remember { mutableStateOf(false) }
-    var sliderHeight by remember { mutableStateOf(0f) }
+    var sliderHeight by remember { mutableFloatStateOf(0f) }
     
     // Update currentLevel when level changes externally
     LaunchedEffect(level) {
@@ -318,7 +310,7 @@ fun FrequencyBandSlider(
     }
     
     // Smooth indicator and thumb position
-    val normalizedLevel = ((currentLevel - minLevel).toFloat() / (maxLevel - minLevel)).coerceIn(0f, 1f)
+    val normalizedLevel = ((currentLevel - minLevel).toFloat() / (maxLevel - minLevel).coerceAtLeast(1)).coerceIn(0f, 1f)
     
     val thumbScale by animateFloatAsState(
         targetValue = if (isDragging) 1.25f else 1f,
@@ -350,7 +342,7 @@ fun FrequencyBandSlider(
                 .onGloballyPositioned { coordinates ->
                     sliderHeight = coordinates.size.height.toFloat()
                 }
-                .pointerInput(Unit) {
+                .pointerInput(minLevel, maxLevel) {
                     detectDragGestures(
                         onDragStart = { offset ->
                             isDragging = true
@@ -359,16 +351,16 @@ fun FrequencyBandSlider(
                                 val fraction = (1f - (tapY / sliderHeight)).coerceIn(0f, 1f)
                                 val newLevel = (minLevel + (maxLevel - minLevel) * fraction).toInt()
                                 currentLevel = newLevel.coerceIn(minLevel, maxLevel)
-                                onLevelChange(currentLevel)
+                                latestLevelChange(currentLevel)
                             }
                         },
                         onDragEnd = { 
                             isDragging = false
-                            onLevelChange(currentLevel)
+                            latestLevelChange(currentLevel)
                         },
                         onDragCancel = {
                             isDragging = false
-                            onLevelChange(currentLevel)
+                            latestLevelChange(currentLevel)
                         },
                         onDrag = { change, _ ->
                             change.consume()
@@ -377,12 +369,12 @@ fun FrequencyBandSlider(
                                 val fraction = (1f - (currentY / sliderHeight)).coerceIn(0f, 1f)
                                 val newLevel = (minLevel + (maxLevel - minLevel) * fraction).toInt()
                                 currentLevel = newLevel.coerceIn(minLevel, maxLevel)
-                                onLevelChange(currentLevel)
+                                latestLevelChange(currentLevel)
                             }
                         }
                     )
                 }
-                .pointerInput(Unit) {
+                .pointerInput(minLevel, maxLevel) {
                     detectTapGestures(
                         onTap = { tapOffset ->
                             if (sliderHeight > 0f) {
@@ -390,7 +382,7 @@ fun FrequencyBandSlider(
                                 val fraction = (1f - (tapY / sliderHeight)).coerceIn(0f, 1f)
                                 val newLevel = (minLevel + (maxLevel - minLevel) * fraction).toInt()
                                 currentLevel = newLevel.coerceIn(minLevel, maxLevel)
-                                onLevelChange(currentLevel)
+                                latestLevelChange(currentLevel)
                             }
                         }
                     )
@@ -464,213 +456,58 @@ fun FrequencyBandSlider(
             color = glassColors.textColor,
             fontSize = 12.sp
         )
-    }
-}
-
-@Composable
-fun BassBoostSection(
-    equalizerManager: EqualizerManager,
-    bassBoost: Int
-) {
-    var currentBassBoost by remember(bassBoost) { mutableStateOf(bassBoost) }
-    var isDragging by remember { mutableStateOf(false) }
-    val isBassBoostEnabled = currentBassBoost > 0
-    val glassColors = glassCardColors()
-    
-    // Update currentBassBoost when bassBoost changes externally
-    LaunchedEffect(bassBoost) {
-        if (!isDragging) {
-            currentBassBoost = bassBoost
-        }
-    }
-    
-    val animatedValue by animateFloatAsState(
-        targetValue = currentBassBoost.toFloat(),
-        animationSpec = if (isDragging) tween(0) else spring(dampingRatio = 0.7f, stiffness = 300f),
-        label = "bassBoost"
-    )
-    
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .glassmorphic(
-                shape = RoundedCornerShape(24.dp),
-                backgroundColor = glassColors.backgroundColor,
-                borderColor = glassColors.borderColor
-            )
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Header with toggle button
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(
-                    Icons.Rounded.VolumeUp,
-                    contentDescription = null,
-                    tint = glassColors.accentColor,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    "Bass Boost",
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = glassColors.textColor
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                
-                // Toggle button to enable/disable bass boost
-                Box(
-                    modifier = Modifier
-                        .glassmorphic(
-                            shape = RoundedCornerShape(16.dp),
-                            backgroundColor = if (isBassBoostEnabled) glassColors.accentColor.copy(alpha = 0.2f) else glassColors.backgroundColor.copy(alpha = 0.3f),
-                            borderColor = if (isBassBoostEnabled) glassColors.accentColor.copy(alpha = 0.5f) else glassColors.borderColor
-                        )
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable {
-                            if (isBassBoostEnabled) {
-                                currentBassBoost = 0
-                                equalizerManager.setBassBoost(0)
-                            } else {
-                                currentBassBoost = 500
-                                equalizerManager.setBassBoost(500)
-                            }
-                        }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            if (isBassBoostEnabled) "ON" else "OFF",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isBassBoostEnabled) glassColors.accentColor else glassColors.subTextColor
-                        )
-                    }
-                }
-            }
-            
-            // Slider (only show when enabled)
-            if (isBassBoostEnabled) {
-                Text(
-                    "${(currentBassBoost / 10)}%",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = glassColors.accentColor,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
-                
-                Slider(
-                    value = animatedValue,
-                    onValueChange = {
-                        isDragging = true
-                        currentBassBoost = it.toInt()
-                        equalizerManager.setBassBoost(currentBassBoost)
-                    },
-                    onValueChangeFinished = {
-                        isDragging = false
-                        equalizerManager.setBassBoost(currentBassBoost)
-                    },
-                    valueRange = 0f..1000f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = glassColors.accentColor,
-                        activeTrackColor = glassColors.accentColor,
-                        inactiveTrackColor = glassColors.textColor.copy(alpha = 0.08f)
-                    )
-                )
-                
-                // Labels
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        "Off", 
-                        style = MaterialTheme.typography.labelSmall,
-                        color = glassColors.subTextColor
-                    )
-                    Text(
-                        "100%", 
-                        style = MaterialTheme.typography.labelSmall,
-                        color = glassColors.subTextColor
-                    )
-                }
-            } else {
-                // Placeholder when disabled
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(40.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "Tap 'ON' to enable Bass Boost",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = glassColors.subTextColor
-                    )
-                }
-            }
+        TextButton(onClick = { latestLevelChange(0) }, enabled = currentLevel != 0,
+            contentPadding = PaddingValues(0.dp), modifier = Modifier.width(55.dp)) {
+            Icon(Icons.Rounded.Refresh, "Reset ${formatFrequency(centerFreq)} band", modifier = Modifier.size(14.dp))
+            Text("Reset", fontSize = 10.sp)
         }
     }
 }
 
 @Composable
-fun VirtualizerSection(
-    equalizerManager: EqualizerManager,
-    virtualizer: Int
-) {
-    val glassColors = glassCardColors()
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .glassmorphic(
-                shape = RoundedCornerShape(20.dp),
-                backgroundColor = glassColors.backgroundColor,
-                borderColor = glassColors.borderColor
-            )
+fun BassBoostSection(equalizerManager: EqualizerManager, bassBoost: Int) {
+    EffectStrengthSection("Bass Boost", Icons.Rounded.VolumeUp, bassBoost,
+        equalizerManager::setBassBoost, { equalizerManager.setBassBoost(0) })
+}
+
+@Composable
+fun VirtualizerSection(equalizerManager: EqualizerManager, virtualizer: Int) {
+    EffectStrengthSection("Virtualizer", Icons.Rounded.SurroundSound, virtualizer,
+        equalizerManager::setVirtualizer, { equalizerManager.setVirtualizer(0) })
+}
+
+@Composable
+private fun EffectStrengthSection(title: String, icon: ImageVector, value: Int, onChange: (Int) -> Unit, onReset: () -> Unit) {
+    val colors = glassCardColors()
+    Column(
+        modifier = Modifier.fillMaxWidth().glassmorphic(
+            shape = RoundedCornerShape(20.dp), backgroundColor = colors.backgroundColor, borderColor = colors.borderColor
+        ).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Rounded.SurroundSound,
-                    contentDescription = null,
-                    tint = glassColors.accentColor,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    "Virtualizer",
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = glassColors.textColor
-                )
-            }
-            Slider(
-                value = virtualizer.toFloat(),
-                onValueChange = { equalizerManager.setVirtualizer(it.toInt()) },
-                valueRange = 0f..1000f,
-                colors = SliderDefaults.colors(
-                    thumbColor = glassColors.accentColor,
-                    activeTrackColor = glassColors.accentColor,
-                    inactiveTrackColor = glassColors.textColor.copy(alpha = 0.08f)
-                )
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Off", style = MaterialTheme.typography.labelSmall, color = glassColors.subTextColor)
-                Text("${(virtualizer / 10)}%", style = MaterialTheme.typography.labelSmall, color = glassColors.subTextColor)
-            }
+        EffectSectionHeader(title, icon, value != 0, onReset)
+        Slider(value = value.toFloat(), onValueChange = { onChange(it.toInt()) }, valueRange = 0f..1000f,
+            colors = SliderDefaults.colors(thumbColor = colors.accentColor, activeTrackColor = colors.accentColor,
+                inactiveTrackColor = colors.textColor.copy(alpha = 0.08f)))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Off", style = MaterialTheme.typography.labelSmall, color = colors.subTextColor)
+            Text("${value / 10}%", style = MaterialTheme.typography.labelSmall, color = colors.subTextColor)
+        }
+    }
+}
+
+@Composable
+private fun EffectSectionHeader(title: String, icon: ImageVector, canReset: Boolean, onReset: () -> Unit) {
+    val colors = glassCardColors()
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = colors.accentColor, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(title, modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium, color = colors.textColor)
+        TextButton(onClick = onReset, enabled = canReset) {
+            Icon(Icons.Rounded.Refresh, "Reset $title", modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Reset")
         }
     }
 }
@@ -704,21 +541,9 @@ fun ReverbSection(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Rounded.Waves,
-                    contentDescription = null,
-                    tint = glassColors.accentColor,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    "Reverb",
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = glassColors.textColor
-                )
-            }
+            EffectSectionHeader("Reverb", Icons.Rounded.Waves,
+                currentPreset != android.media.audiofx.PresetReverb.PRESET_NONE.toInt(),
+                { equalizerManager.setReverbPreset(android.media.audiofx.PresetReverb.PRESET_NONE.toInt()) })
             reverbPresets.forEach { (name, preset) ->
                 Row(
                     modifier = Modifier

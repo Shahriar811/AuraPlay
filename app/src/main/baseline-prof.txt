@@ -1,0 +1,13 @@
+# Targeted, manually maintained app rules complement the profiles shipped by Compose/Room/Coil.
+# Keep startup and first-scroll code compiled before its first interactive use.
+HSPLcom/example/auraplay/AuraPlayApplication;->**(**)**
+HSPLcom/example/auraplay/MainActivity;->**(**)**
+HSPLcom/example/auraplay/MainActivity$*;->**(**)**
+HSPLcom/example/auraplay/MainViewModel;->**(**)**
+HSPLcom/example/auraplay/MainViewModel$*;->**(**)**
+HSPLcom/example/auraplay/ui/HomeScreenKt;->**(**)**
+HSPLcom/example/auraplay/ui/HomeScreenKt$*;->**(**)**
+HSPLcom/example/auraplay/ui/GlassmorphismKt;->**(**)**
+HSPLcom/example/auraplay/ui/theme/ThemeKt;->**(**)**
+HSPLcom/example/auraplay/ui/MotionControlsKt;->**(**)**
+HSPLcom/example/auraplay/ui/PlaybackChromeKt;->**(**)**

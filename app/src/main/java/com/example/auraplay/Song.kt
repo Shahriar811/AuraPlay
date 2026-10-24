@@ -3,6 +3,7 @@ package com.example.auraplay.data
 import android.net.Uri
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import androidx.room.ColumnInfo
 
 @Entity
 data class Song(
@@ -17,5 +18,6 @@ data class Song(
     val folderPath: String = "",
     val playCount: Int = 0,
     val lastPlayedTimestamp: Long = 0L,
-    val isFavorite: Boolean = false // Field for favorites
+    val isFavorite: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val dateAdded: Long = 0L
 )

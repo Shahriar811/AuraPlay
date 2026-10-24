@@ -3,6 +3,8 @@ package com.example.auraplay.ui
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.LruCache
+import kotlinx.coroutines.CancellationException
 import android.net.Uri
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
@@ -12,21 +14,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 data class ExtractedColors(
-    val dominantColor: Color = Color(0xFFC084FC),
-    val vibrantColor: Color = Color(0xFF9333EA),
-    val darkMutedColor: Color = Color(0xFF1E1035),
-    val lightMutedColor: Color = Color(0xFFE9D5FF)
+    val dominantColor: Color = Color(0xFFC4E6BB),
+    val vibrantColor: Color = Color(0xFFA9CDA4),
+    val darkMutedColor: Color = Color(0xFF20351F),
+    val lightMutedColor: Color = Color(0xFFE3EFDD)
 )
 
 object ColorExtractor {
+    private val cache = LruCache<String, ExtractedColors>(48)
 
-    private val DEFAULT_VIVID_FALLBACK = Color(0xFFC084FC) // Radiant Electric Purple
+    private val DEFAULT_VIVID_FALLBACK = Color(0xFFC4E6BB) // Radiant Electric Purple
 
     suspend fun extractColors(context: Context, uriString: String?): ExtractedColors = withContext(Dispatchers.IO) {
         if (uriString.isNullOrBlank() || uriString == "null") {
             return@withContext ExtractedColors()
         }
 
+        cache.get(uriString)?.let { return@withContext it }
         try {
             val uri = Uri.parse(uriString)
             val boundsOptions = BitmapFactory.Options().apply {
@@ -56,24 +60,25 @@ object ColorExtractor {
             }
 
             if (bitmap != null) {
-                val palette = Palette.from(bitmap)
-                    .maximumColorCount(16)
-                    .generate()
-
-                val vividColor = selectBestVividColor(palette)
-
-                return@withContext ExtractedColors(
+                val vividColor = try {
+                    selectBestVividColor(Palette.from(bitmap).maximumColorCount(16).generate())
+                } finally { bitmap.recycle() }
+                val extracted = ExtractedColors(
                     dominantColor = vividColor,
                     vibrantColor = vividColor,
-                    darkMutedColor = Color(0xFF1E1035),
-                    lightMutedColor = Color(0xFFE9D5FF)
+                    darkMutedColor = Color(0xFF20351F),
+                    lightMutedColor = Color(0xFFE3EFDD)
                 )
+                cache.put(uriString, extracted)
+                return@withContext extracted
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             // Fallback
         }
 
-        ExtractedColors()
+        ExtractedColors().also { cache.put(uriString, it) }
     }
 
     /**

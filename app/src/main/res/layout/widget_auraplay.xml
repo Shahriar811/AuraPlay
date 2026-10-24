@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="UseAppTint"
     android:id="@+id/widget_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -8,13 +10,14 @@
     android:gravity="center_vertical"
     android:padding="8dp">
 
+    <!-- RemoteViews requires platform widgets; native android:tint is supported on minSdk 26. -->
     <ImageView
         android:id="@+id/widget_album_art"
         android:layout_width="52dp"
         android:layout_height="52dp"
-        android:src="@drawable/ic_launcher_foreground"
+        android:src="@drawable/ic_music_placeholder"
         android:scaleType="centerCrop"
-        android:background="#2A1E4A"
+        android:background="#2B3827"
         android:contentDescription="Album Art" />
 
     <LinearLayout
@@ -41,7 +44,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="No song playing"
-            android:textColor="#A78BFA"
+            android:textColor="#B6BDB0"
             android:textSize="12sp"
             android:singleLine="true"
             android:ellipsize="end" />
@@ -62,7 +65,7 @@
         android:layout_height="44dp"
         android:background="@drawable/widget_button_background"
         android:src="@android:drawable/ic_media_play"
-        android:tint="#FFFFFF"
+        android:tint="#20351F"
         android:contentDescription="Play/Pause" />
 
     <ImageButton

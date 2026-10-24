@@ -1,5 +1,7 @@
 package com.example.auraplay.ui
 
+import com.example.auraplay.ui.MotionIconButton as IconButton
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.auraplay.MainViewModel
 import com.example.auraplay.data.Song
@@ -27,8 +30,8 @@ fun AddSongsToPlaylistScreen(
     navController: NavController,
     viewModel: MainViewModel
 ) {
-    val allSongs by viewModel.songs.collectAsState()
-    val playlistWithSongs by viewModel.getPlaylistWithSongs(playlistId).collectAsState(initial = null)
+    val allSongs by viewModel.librarySongs.collectAsStateWithLifecycle()
+    val playlistWithSongs by remember(playlistId) { viewModel.getPlaylistWithSongs(playlistId) }.collectAsStateWithLifecycle(initialValue = null)
     val existingSongIds = remember(playlistWithSongs) {
         playlistWithSongs?.songs?.map { it.id }?.toSet() ?: emptySet()
     }
@@ -85,7 +88,7 @@ fun AddSongsToPlaylistScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             items(
