@@ -2,6 +2,7 @@ package com.example.auraplay
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.auraplay.ui.*
 import com.example.auraplay.ui.theme.AuraPlayTheme
+import com.example.auraplay.data.Playlist
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -33,6 +35,32 @@ import kotlin.math.abs
 
 class PopupStyleTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun playlistMenuOpensBesideItsOverflowButton() {
+        compose.setContent {
+            AuraPlayTheme(darkTheme = false) {
+                Box(Modifier.fillMaxSize().padding(top = 72.dp)) {
+                    PlaylistItem(Playlist(name = "Workout"), {}, {}, {})
+                }
+            }
+        }
+
+        val overflow = compose.onNodeWithContentDescription("More options")
+        overflow.performClick()
+        compose.onNodeWithText("Rename").assertIsDisplayed()
+        compose.onNodeWithText("Delete playlist").assertIsDisplayed()
+        val anchor = overflow.fetchSemanticsNode()
+        val menu = compose.onNodeWithTag("aura-popup-menu").fetchSemanticsNode()
+        compose.runOnIdle {
+            val anchorPosition = anchor.positionOnScreen
+            val menuPosition = menu.positionOnScreen
+            val tolerance = with(compose.density) { 2.dp.toPx() }
+            val horizontalGap = menuPosition.x + menu.size.width - (anchorPosition.x + anchor.size.width)
+            val verticalGap = menuPosition.y - (anchorPosition.y + anchor.size.height)
+            assertTrue("The menu should align with the overflow button's right edge", abs(horizontalGap) <= tolerance)
+            assertTrue("The menu should open directly below the overflow button", abs(verticalGap) <= tolerance)
+        }
+    }
 
     @Test fun openMenuFollowsLightAndDarkThemesWithLargeText() {
         val dark = mutableStateOf(false)

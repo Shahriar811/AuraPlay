@@ -4,7 +4,6 @@ import com.example.auraplay.ui.MotionIconButton as IconButton
 import com.example.auraplay.ui.MotionTextButton as TextButton
 import com.example.auraplay.ui.MotionFloatingActionButton as FloatingActionButton
 
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,7 +11,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -224,41 +222,42 @@ fun PlaylistItem(
                     color = glassColors.textColor
                 )
             }
-            IconButton(
-                onClick = { showMenu = true },
-                modifier = Modifier.size(40.dp)
-            ) {
-                Icon(
-                    Icons.Rounded.MoreVert, 
-                    contentDescription = "More options",
-                    tint = glassColors.subTextColor
-                )
+            Box {
+                IconButton(
+                    onClick = { showMenu = true },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.MoreVert,
+                        contentDescription = "More options",
+                        tint = glassColors.subTextColor
+                    )
+                }
+                AuraDropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    AuraMenuItem(
+                        label = "Rename",
+                        icon = Icons.Rounded.Edit,
+                        onClick = {
+                            showMenu = false
+                            onRename(playlist)
+                        }
+                    )
+                    AuraMenuDivider()
+                    AuraMenuItem(
+                        label = "Delete playlist",
+                        icon = Icons.Rounded.DeleteOutline,
+                        destructive = true,
+                        onClick = {
+                            showMenu = false
+                            onDelete(playlist)
+                        }
+                    )
+                }
             }
         }
-    }
-    
-    AuraDropdownMenu(
-        expanded = showMenu, 
-        onDismissRequest = { showMenu = false }
-    ) {
-        AuraMenuItem(
-            label = "Rename",
-            icon = Icons.Rounded.Edit,
-            onClick = {
-                onRename(playlist)
-                showMenu = false
-            }
-        )
-        AuraMenuDivider()
-        AuraMenuItem(
-            label = "Delete playlist",
-            icon = Icons.Rounded.DeleteOutline,
-            destructive = true,
-            onClick = {
-                onDelete(playlist)
-                showMenu = false
-            }
-        )
     }
 }
 
