@@ -101,7 +101,7 @@ Version 1.1.2 adds library multi-select playback and visible Equalizer, Bookmark
 ### ⚡ Background Service & Widgets
 * **Media3 Foreground Service:** Seamless background playback powered by `MediaSessionService` and ExoPlayer.
 * **System Media Controls:** Full support for Android 11+ notification shade and lockscreen media player with interactive seekbar and tap-to-open session activity.
-* **Home Screen Widgets:** Compact, Large, and Artwork styles with cover images, resize support, configuration, and playback controls that reconnect after a restart.
+* **Home Screen Widgets** include Compact, Large, Square (2×2), and Artwork layouts with centered playback controls. Pin widgets from Settings, preview four corner styles, and configure each widget independently.
 * **Headphone Unplug Detection:** Automatically pauses audio when headphones are disconnected (`ACTION_AUDIO_BECOMING_NOISY`).
 
 ---

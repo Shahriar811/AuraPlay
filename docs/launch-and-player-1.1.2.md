@@ -65,3 +65,11 @@ Use the **performance** build variant in Android Studio for app performance chec
 ## Typography update — November 25, 2026
 
 AuraPlay bundles Manrope across all Material text styles. Headings, song details, controls, and dialogs share the same family with distinct sizes and weights. Audio info uses a semibold filename, a smaller location line, clearer field labels, and the app's neutral surface. The font license and upstream font log are packaged with the application.
+
+## Widget shape and alignment update — November 25, 2026
+
+Settings → Widget styles offers Compact, Large, Square (2×2), and Artwork layouts with live previews. Select Square before adding a widget to request the square launcher slot. Straight, Soft, Rounded, and Extra rounded corners can be selected globally or saved for individual widgets through launcher configuration. Backup and restore include the default corner choice. Older settings retain rounded corners.
+
+The compact widget's playback controls now share the artwork's vertical center. A narrow layout keeps all three 48dp controls visible at the minimum supported width. Widget backgrounds identify their custom outlines to compatible launchers so the selected corner shape is retained on the home screen.
+
+All 58 JVM tests passed. Five native widget checks passed on the Pixel 7 Pro, covering compact alignment, minimum square and narrow sizes, corner outlines, and saved per-widget appearance. The optimized APK and Android test APK built successfully, and lint reported zero errors with 71 warnings.

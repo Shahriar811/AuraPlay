@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="wrap_content"
     android:layout_height="48dp"
-    android:layout_gravity="center_horizontal"
+    android:layout_gravity="center"
     android:gravity="center"
     android:orientation="horizontal"
     tools:ignore="UseAppTint">
@@ -14,6 +14,8 @@
         android:layout_height="48dp"
         android:background="?android:attr/selectableItemBackgroundBorderless"
         android:contentDescription="@string/widget_previous_track"
+        android:padding="12dp"
+        android:scaleType="fitCenter"
         android:src="@drawable/ic_widget_previous"
         android:tint="#F0F2EB" />
 
@@ -23,6 +25,8 @@
         android:layout_height="48dp"
         android:background="@drawable/widget_button_background"
         android:contentDescription="@string/play"
+        android:padding="12dp"
+        android:scaleType="fitCenter"
         android:src="@drawable/ic_widget_play"
         android:tint="#20351F" />
 
@@ -32,6 +36,8 @@
         android:layout_height="48dp"
         android:background="?android:attr/selectableItemBackgroundBorderless"
         android:contentDescription="@string/widget_next_track"
+        android:padding="12dp"
+        android:scaleType="fitCenter"
         android:src="@drawable/ic_widget_next"
         android:tint="#F0F2EB" />
 

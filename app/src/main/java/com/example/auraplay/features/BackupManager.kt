@@ -62,6 +62,7 @@ class BackupManager(private val app: AuraPlayApplication, private val settings: 
         }
         manifest.put("settings", settings.exportSettings())
         manifest.put("widgetStyle", app.getSharedPreferences("widget_styles", 0).getString("default", "COMPACT"))
+        manifest.put("widgetShape", com.example.auraplay.widget.WidgetStyles.defaultShape(app).name)
         val bytes = manifest.toString().toByteArray(Charsets.UTF_8)
         require(bytes.size <= 64 * 1024 * 1024) { "This backup is too large to export." }
         val output = app.contentResolver.openOutputStream(uri, "wt") ?: error("Could not open the backup destination.")
@@ -163,8 +164,13 @@ class BackupManager(private val app: AuraPlayApplication, private val settings: 
             }
         }
         root.optJSONObject("settings")?.let { settings.importSettings(it) }
-        val widget = root.optString("widgetStyle", "COMPACT").takeIf { it in listOf("COMPACT", "STANDARD", "ARTWORK") } ?: "COMPACT"
+        val widget = root.optString("widgetStyle", "COMPACT").takeIf { value ->
+            com.example.auraplay.widget.WidgetStyle.entries.any { it.name == value }
+        } ?: "COMPACT"
         com.example.auraplay.widget.WidgetStyles.setDefault(app, com.example.auraplay.widget.WidgetStyle.valueOf(widget))
+        val shape = com.example.auraplay.widget.WidgetShape.entries.firstOrNull { it.name == root.optString("widgetShape") }
+            ?: com.example.auraplay.widget.WidgetShape.ROUNDED
+        com.example.auraplay.widget.WidgetStyles.setDefaultShape(app, shape)
         return "Restored ${playlists.size} playlists, $likes liked songs and $marks bookmarks." + if (missing.isEmpty()) "" else " ${missing.size} unavailable tracks were skipped."
         } finally { staging.deleteRecursively() }
     }

@@ -8,8 +8,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.auraplay.ui.theme.AuraPlayTheme
@@ -21,14 +24,16 @@ class WidgetConfigActivity : ComponentActivity() {
         setResult(RESULT_CANCELED)
         if (id == AppWidgetManager.INVALID_APPWIDGET_ID) { finish(); return }
         setContent { AuraPlayTheme {
-            var selected by remember { mutableStateOf(WidgetStyles.get(this, id)) }
-            Surface(Modifier.fillMaxSize()) { Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            var selected by rememberSaveable { mutableStateOf(WidgetStyles.get(this, id)) }
+            var shape by rememberSaveable { mutableStateOf(WidgetStyles.shape(this, id)) }
+            Surface(Modifier.fillMaxSize()) { Column(
+                Modifier.systemBarsPadding().verticalScroll(rememberScrollState()).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
                 Text("AuraPlay widget", style = MaterialTheme.typography.headlineMedium)
-                WidgetStyle.entries.forEach { style ->
-                    OutlinedCard(onClick = { selected = style }) { ListItem(headlineContent = { Text(style.title) }, supportingContent = { Text(style.description) }, trailingContent = { RadioButton(selected == style, { selected = style }) }) }
-                }
+                WidgetAppearanceOptions(selected, shape, onStyleChange = { selected = it }, onShapeChange = { shape = it })
                 Button(onClick = {
-                    WidgetStyles.set(this@WidgetConfigActivity, id, selected)
+                    WidgetStyles.setAppearance(this@WidgetConfigActivity, id, selected, shape)
                     AuraPlayAppWidgetProvider.updateAppWidget(this@WidgetConfigActivity, AppWidgetManager.getInstance(this@WidgetConfigActivity), id)
                     setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)); finish()
                 }, modifier = Modifier.fillMaxWidth()) { Text("Save widget") }

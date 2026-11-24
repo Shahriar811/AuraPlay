@@ -18,4 +18,6 @@
     <string name="widget_resume">Resume</string>
     <string name="widget_previous_track">Previous track</string>
     <string name="widget_next_track">Next track</string>
+    <string name="widget_square_name">AuraPlay Square</string>
+    <string name="widget_square_description">Square music widget with artwork and playback controls</string>
 </resources>

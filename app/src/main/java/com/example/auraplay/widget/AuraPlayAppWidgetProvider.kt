@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-class AuraPlayAppWidgetProvider : AppWidgetProvider() {
+open class AuraPlayAppWidgetProvider : AppWidgetProvider() {
     companion object {
         const val ACTION_PLAY_PAUSE = "com.example.auraplay.widget.ACTION_PLAY_PAUSE"
         const val ACTION_PREV = "com.example.auraplay.widget.ACTION_PREV"
@@ -42,7 +42,7 @@ class AuraPlayAppWidgetProvider : AppWidgetProvider() {
         private val nextGeneration = java.util.concurrent.atomic.AtomicLong()
         fun updateAllWidgets(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
-            manager.getAppWidgetIds(ComponentName(context, AuraPlayAppWidgetProvider::class.java)).forEach { updateAppWidget(context, manager, it) }
+            WidgetStyles.ids(context).forEach { updateAppWidget(context, manager, it) }
         }
         fun updateAppWidget(context: Context, manager: AppWidgetManager, id: Int) {
             if (Looper.myLooper() != Looper.getMainLooper()) {
@@ -55,13 +55,30 @@ class AuraPlayAppWidgetProvider : AppWidgetProvider() {
             val height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 70)
             val width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
             val requested = WidgetStyles.get(context, id)
-            val style = if (height < 120) WidgetStyle.COMPACT else if (height < 180 && requested == WidgetStyle.ARTWORK) WidgetStyle.STANDARD else requested
-            val layout = when (style) { WidgetStyle.COMPACT -> R.layout.widget_auraplay; WidgetStyle.STANDARD -> R.layout.widget_auraplay_large; WidgetStyle.ARTWORK -> R.layout.widget_auraplay_artwork }
+            val style = when {
+                height < 120 -> WidgetStyle.COMPACT
+                height < 180 && requested == WidgetStyle.ARTWORK -> WidgetStyle.STANDARD
+                else -> requested
+            }
+            val layout = if (style == WidgetStyle.COMPACT && width < 250) R.layout.widget_auraplay_narrow else widgetLayout(style)
             val views = RemoteViews(context.packageName, layout)
+            val shape = WidgetStyles.shape(context, id)
+            applyWidgetShape(views, shape, style)
+            if (width < 250 && (style == WidgetStyle.STANDARD || style == WidgetStyle.ARTWORK)) {
+                val padding = (8 * context.resources.displayMetrics.density).toInt()
+                val target = if (style == WidgetStyle.ARTWORK) R.id.widget_artwork_shade else android.R.id.background
+                views.setViewPadding(target, padding, padding, padding, padding)
+            }
+            if (layout == R.layout.widget_auraplay_narrow) {
+                val padding = (shape.radiusDp * context.resources.displayMetrics.density).toInt()
+                views.setViewPadding(R.id.widget_title, padding, 0, padding, 0)
+            }
             val state = MusicService.playerState.value
             val song = state.currentSong
             views.setTextViewText(R.id.widget_title, song?.title ?: context.getString(R.string.app_name))
             views.setTextViewText(R.id.widget_artist, song?.artist ?: context.getString(R.string.widget_resume_hint))
+            views.setContentDescription(R.id.widget_title, song?.let { "${it.title}, ${it.artist}" }
+                ?: context.getString(R.string.app_name))
             views.setImageViewResource(R.id.widget_btn_play_pause, if (state.isPlaying) R.drawable.ic_widget_pause else R.drawable.ic_widget_play)
             val playLabel = when {
                 state.isPlaying -> R.string.pause
@@ -72,7 +89,7 @@ class AuraPlayAppWidgetProvider : AppWidgetProvider() {
             val open = PendingIntent.getActivity(context, 1, Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            views.setOnClickPendingIntent(R.id.widget_container, open)
+            views.setOnClickPendingIntent(android.R.id.background, open)
             listOf(R.id.widget_btn_play_pause to ACTION_PLAY_PAUSE, R.id.widget_btn_prev to ACTION_PREV, R.id.widget_btn_next to ACTION_NEXT).forEachIndexed { index, (button, action) ->
                 views.setOnClickPendingIntent(button, PendingIntent.getBroadcast(context, index + 1, Intent(context, AuraPlayAppWidgetProvider::class.java).setAction(action), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             }
@@ -92,7 +109,7 @@ class AuraPlayAppWidgetProvider : AppWidgetProvider() {
                             cache.put(uri, bitmap)
                             withContext(Dispatchers.Main.immediate) {
                                 if (generations[id] == generation && MusicService.playerState.value.currentSong?.albumArtUri == uri)
-                                    manager.partiallyUpdateAppWidget(id, RemoteViews(context.packageName, layout).apply { setImageViewBitmap(R.id.widget_album_art, bitmap) })
+                                    manager.updateAppWidget(id, views.apply { setImageViewBitmap(R.id.widget_album_art, bitmap) })
                             }
                         }
                     } catch (_: Exception) { /* The placeholder remains usable when artwork is unavailable. */ }

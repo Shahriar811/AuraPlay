@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/widget_container"
+    android:id="@android:id/background"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
@@ -15,6 +15,7 @@
         android:src="@drawable/ic_music_placeholder" />
 
     <LinearLayout
+        android:id="@+id/widget_artwork_shade"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@drawable/widget_artwork_shade"
