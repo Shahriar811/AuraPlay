@@ -12,10 +12,12 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
+internal fun Song.audioUri(): Uri = if (data.startsWith("content:") || data.startsWith("file:")) Uri.parse(data)
+    else ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+
 fun Song.toMediaItem(queueKey: String = UUID.randomUUID().toString()): MediaItem = MediaItem.Builder()
     .setMediaId(id.toString())
-    .setUri(if (data.startsWith("content:") || data.startsWith("file:")) Uri.parse(data)
-        else ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id))
+    .setUri(audioUri())
     .setMediaMetadata(MediaMetadata.Builder().setTitle(title).setArtist(artist).setAlbumTitle(album)
         .setArtworkUri(albumArtUri?.let(Uri::parse))
         .setExtras(Bundle().apply {

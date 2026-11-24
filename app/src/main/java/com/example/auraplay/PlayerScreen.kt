@@ -8,6 +8,8 @@ import com.example.auraplay.ui.MotionOutlinedButton as OutlinedButton
 import com.example.auraplay.ui.MotionTextButton as TextButton
 
 import androidx.compose.animation.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -49,6 +51,7 @@ import androidx.compose.ui.semantics.stateDescription
 import com.example.auraplay.R
 import coil.compose.AsyncImage
 import com.example.auraplay.LyricsManager
+import com.example.auraplay.LyricSearchTerms
 import com.example.auraplay.MainViewModel
 import com.example.auraplay.SongLyrics
 import com.example.auraplay.data.Song
@@ -86,6 +89,13 @@ fun PlayerScreen(
     var showQueue by remember { mutableStateOf(false) }
     var showBookmarks by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
+    var showLyricsSearch by remember(songId) { mutableStateOf(false) }
+    var importSongId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val importLyrics = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val target = importSongId
+        importSongId = null
+        if (target != null && uri != null) viewModel.importLyrics(target, uri)
+    }
     var feedback by remember { mutableStateOf<String?>(null) }
     var feedbackLabel by remember { mutableStateOf("") }
     val latestState by rememberUpdatedState(playerState)
@@ -118,6 +128,10 @@ fun PlayerScreen(
         onMoveQueueItem = { from, to -> com.example.auraplay.service.MusicService.moveQueueItem(from, to) })
     if (showBookmarks && song != null) com.example.auraplay.features.PlayerBookmarksSheet(song, playerState.currentPosition, viewModel,
         onDismiss = { showBookmarks = false }, onSeek = { onSeek(it.toFloat()); showBookmarks = false })
+    if (showLyricsSearch && song != null) LyricsSearchDialog(song, onDismiss = { showLyricsSearch = false }) { search ->
+        showLyricsSearch = false
+        viewModel.loadLyrics(song, search = search)
+    }
 
     if (song == null) {
         Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -158,7 +172,10 @@ fun PlayerScreen(
                     if (lyricsVisible) {
                         Box(Modifier.fillMaxSize().padding(16.dp)) {
                             SpotifyLyricsView(lyrics, playerState.currentPosition, lyricsLoading, colors.accentColor, onSeek,
-                                { viewModel.loadLyrics(song, true) }, { showLyrics = false })
+                                onRefreshLyrics = { viewModel.loadLyrics(song, true) },
+                                onSearchLyrics = { showLyricsSearch = true },
+                                onImportLyrics = { importSongId = song.id; importLyrics.launch(arrayOf("*/*")) },
+                                onToggleLyrics = { showLyrics = false })
                         }
                     } else Box(
                         Modifier.fillMaxSize()
@@ -284,6 +301,30 @@ fun PlayerScreen(
 }
 
 @Composable
+private fun LyricsSearchDialog(song: Song, onDismiss: () -> Unit, onSearch: (LyricSearchTerms) -> Unit) {
+    var title by rememberSaveable(song.id) { mutableStateOf(song.title.take(200)) }
+    var artist by rememberSaveable(song.id) {
+        mutableStateOf(song.artist.takeUnless { it.equals("Unknown Artist", true) }.orEmpty().take(200))
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Search lyrics") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(title, { title = it.take(200) }, label = { Text("Track title") }, singleLine = true)
+                OutlinedTextField(artist, { artist = it.take(200) }, label = { Text("Artist (optional)") }, singleLine = true)
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = title.isNotBlank(), onClick = { onSearch(LyricSearchTerms(title.trim(), artist.trim())) }) {
+                Text("Search")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
 internal fun PlayerQuickActions(
     sleepTimer: SleepTimerState,
     onEqualizer: () -> Unit,
@@ -334,6 +375,8 @@ fun SpotifyLyricsView(
     accentColor: Color,
     onSeek: (Float) -> Unit,
     onRefreshLyrics: () -> Unit,
+    onSearchLyrics: () -> Unit,
+    onImportLyrics: () -> Unit,
     onToggleLyrics: () -> Unit
 ) {
     val darkTheme = com.example.auraplay.ui.theme.LocalThemeIsDark.current
@@ -379,7 +422,7 @@ fun SpotifyLyricsView(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f, fill = false), verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
@@ -387,21 +430,29 @@ fun SpotifyLyricsView(
                             .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         val sourceText = when (lyrics.source) {
-                            "LOCAL" -> "📁 LOCAL .LRC"
-                            "LRCLIB" -> "✨ SYNCED • LRCLIB"
-                            else -> if (lyrics.isSynced) "✨ SYNCED" else "📝 LYRICS"
+                            "LOCAL" -> "LOCAL .LRC"
+                            "EMBEDDED" -> "EMBEDDED"
+                            "IMPORTED" -> "IMPORTED"
+                            "LRCLIB" -> if (lyrics.isSynced) "SYNCED • LRCLIB" else "LRCLIB"
+                            else -> if (lyrics.isSynced) "SYNCED" else "LYRICS"
                         }
                         Text(
                             text = sourceText,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 0.8.sp,
-                            color = accentColor
+                            color = accentColor, maxLines = 1, overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onSearchLyrics, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Rounded.Search, "Search lyrics", modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = onImportLyrics, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Rounded.FileOpen, "Import lyrics file", modifier = Modifier.size(20.dp))
+                    }
                     IconButton(
                         onClick = onRefreshLyrics,
                         modifier = Modifier.size(36.dp)
@@ -439,7 +490,7 @@ fun SpotifyLyricsView(
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
-                            "Searching lyrics on LRCLIB...",
+                            "Finding lyrics…",
                             color = glassColors.textColor.copy(alpha = 0.85f),
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 14.sp
@@ -465,19 +516,19 @@ fun SpotifyLyricsView(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "Tap below to retry search",
+                            "Try another title or artist, or import lyrics.",
                             color = glassColors.subTextColor,
                             fontSize = 13.sp
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         Button(
-                            onClick = onRefreshLyrics,
+                            onClick = onSearchLyrics,
                             colors = ButtonDefaults.buttonColors(containerColor = accentColor),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(Icons.Rounded.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Search Online Lyrics", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Search lyrics", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }

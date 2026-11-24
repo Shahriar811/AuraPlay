@@ -60,6 +60,7 @@ class MainViewModel(
 
     private var loadLyricsJob: Job? = null
     private var lyricsRequest = 0
+    private var lyricsSongId: Long? = null
 
     // Settings Flows
     val darkTheme: StateFlow<Boolean> = settingsDataStore.darkThemeFlow
@@ -301,20 +302,46 @@ class MainViewModel(
         _sortOrder.value = order
     }
 
-    fun loadLyrics(song: Song?, forceRefresh: Boolean = false) {
+    internal fun loadLyrics(song: Song?, forceRefresh: Boolean = false, search: LyricSearchTerms? = null) {
+        if (!forceRefresh && search == null && lyricsSongId == song?.id &&
+            (_isLyricsLoading.value || _currentLyrics.value.hasText)) return
+        requestLyrics(song?.id) {
+            val track = requireNotNull(song)
+            val librarySong = playlistDao.getSongById(track.id).first() ?: track
+            LyricsManager.getLyricsForSong(getApplication(), librarySong, playlistDao, forceRefresh, search)
+        }
+    }
+
+    internal fun importLyrics(songId: Long, uri: Uri) {
+        if (lyricsSongId == songId) {
+            requestLyrics(songId, onError = "Could not import lyrics. Choose a UTF-8 or UTF-16 lyrics file.") {
+                LyricsManager.importLyrics(getApplication(), songId, uri, playlistDao)
+            }
+        } else viewModelScope.launch {
+            try { LyricsManager.importLyrics(getApplication(), songId, uri, playlistDao) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { showFeatureMessage("Could not import lyrics.") }
+        }
+    }
+
+    private fun requestLyrics(songId: Long?, onError: String? = null, load: suspend () -> SongLyrics) {
         val request = ++lyricsRequest
         loadLyricsJob?.cancel()
+        val previous = _currentLyrics.value.takeIf { lyricsSongId == songId } ?: SongLyrics()
+        lyricsSongId = songId
         _currentLyrics.value = SongLyrics()
         _isLyricsLoading.value = false
-        if (song == null) return
+        if (songId == null) return
         loadLyricsJob = viewModelScope.launch {
             _isLyricsLoading.value = true
             try {
-                _currentLyrics.value = LyricsManager.getLyricsForSong(song, playlistDao, forceRefresh)
+                _currentLyrics.value = load()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
                 android.util.Log.e("MainViewModel", "Could not load lyrics", error)
+                _currentLyrics.value = previous
+                onError?.let(::showFeatureMessage)
             } finally {
                 if (request == lyricsRequest) _isLyricsLoading.value = false
             }
