@@ -95,7 +95,7 @@ fun FavoritesScreen(
                         onSongSelected = { onSongSelected(song) },
                         trailingContent = {
                             Row {
-                            com.example.auraplay.features.FeatureSongMenu(song, navController, viewModel)
+                            com.example.auraplay.features.FeatureSongMenu(song, viewModel)
                             IconButton(
                                 onClick = { viewModel.toggleFavorite(song) },
                                 modifier = Modifier.size(40.dp)

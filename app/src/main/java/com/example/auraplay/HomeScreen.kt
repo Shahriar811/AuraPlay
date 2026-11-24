@@ -108,6 +108,7 @@ fun HomeScreen(
     var showSearch by rememberSaveable { mutableStateOf(searchQuery.isNotBlank()) }
     var showSortMenu by remember { mutableStateOf(false) }
     var songToAdd by remember { mutableStateOf<Song?>(null) }
+    var songForAudioInfo by remember { mutableStateOf<Song?>(null) }
     var collection by remember { mutableStateOf<LibraryCollection?>(null) }
     val selection = rememberSaveable(saver = SongSelectionState.Saver) { SongSelectionState() }
     val scope = rememberCoroutineScope()
@@ -140,6 +141,7 @@ fun HomeScreen(
         else -> "Good evening"
     }
 
+    songForAudioInfo?.let { song -> AudioInfoDialog(song) { songForAudioInfo = null } }
     songToAdd?.let { song ->
         val playlists by viewModel.playlists.collectAsStateWithLifecycle()
         AddToPlaylistDialog(playlists, { songToAdd = null }) {
@@ -290,13 +292,19 @@ fun HomeScreen(
                     }
                     Box {
                         IconButton(onClick = { showSortMenu = true }) { Icon(Icons.Rounded.Sort, "Sort library", tint = colors.subTextColor) }
-                        DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
+                        AuraDropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
+                            val currentSortOrder by viewModel.sortOrder.collectAsStateWithLifecycle()
                             SortOrder.entries.forEach { order ->
-                                DropdownMenuItem(text = { Text(when (order) {
+                                AuraMenuItem(label = when (order) {
                                     SortOrder.TITLE -> "Title"
                                     SortOrder.ARTIST -> "Artist"
                                     SortOrder.DATE_ADDED -> "Recently added"
-                                }) }, onClick = { viewModel.changeSortOrder(order); showSortMenu = false })
+                                }, icon = when (order) {
+                                    SortOrder.TITLE -> Icons.Rounded.SortByAlpha
+                                    SortOrder.ARTIST -> Icons.Rounded.PersonOutline
+                                    SortOrder.DATE_ADDED -> Icons.Rounded.Schedule
+                                }, selected = currentSortOrder == order,
+                                    onClick = { viewModel.changeSortOrder(order); showSortMenu = false })
                             }
                         }
                     }
@@ -340,14 +348,17 @@ fun HomeScreen(
                             } else Box {
                                 // Lazy rows use the standard ripple; no per-row press-animation job/layer.
                                 androidx.compose.material3.IconButton(onClick = { showMenu = true }) { Icon(Icons.Rounded.MoreVert, "Song options", tint = colors.subTextColor) }
-                                if (showMenu) DropdownMenu(expanded = true, onDismissRequest = { showMenu = false }) {
-                                    DropdownMenuItem(text = { Text("Play next") }, onClick = { viewModel.enqueue(song, true); showMenu = false })
-                                    DropdownMenuItem(text = { Text("Add to queue") }, onClick = { viewModel.enqueue(song, false); showMenu = false })
-                                    DropdownMenuItem(text = { Text("Edit song information") }, onClick = { navController.navigate("song_edit/${song.id}"); showMenu = false })
-                                    DropdownMenuItem(text = { Text("Add to playlist") }, onClick = { songToAdd = song; showMenu = false })
-                                    DropdownMenuItem(text = { Text(if (song.isFavorite) "Remove from liked songs" else "Like song") },
+                                if (showMenu) AuraDropdownMenu(expanded = true, onDismissRequest = { showMenu = false }) {
+                                    AuraMenuItem("Play next", icon = Icons.Rounded.SkipNext, onClick = { viewModel.enqueue(song, true); showMenu = false })
+                                    AuraMenuItem("Add to queue", icon = Icons.Rounded.QueueMusic, onClick = { viewModel.enqueue(song, false); showMenu = false })
+                                    AuraMenuItem("Add to playlist", icon = Icons.Rounded.PlaylistAdd, onClick = { songToAdd = song; showMenu = false })
+                                    AuraMenuItem(if (song.isFavorite) "Remove from liked songs" else "Like song",
+                                        icon = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                                         onClick = { viewModel.toggleFavorite(song); showMenu = false })
-                                    DropdownMenuItem(text = { Text("Delete from device") }, onClick = { viewModel.deleteSong(song); showMenu = false })
+                                    AuraMenuItem("Audio info", icon = Icons.Rounded.Info, onClick = { songForAudioInfo = song; showMenu = false })
+                                    AuraMenuDivider()
+                                    AuraMenuItem("Delete from device", icon = Icons.Rounded.DeleteOutline, destructive = true,
+                                        onClick = { viewModel.deleteSong(song); showMenu = false })
                                 }
                             }
                         })
@@ -665,7 +676,7 @@ fun CollectionSongsDialog(
 ) {
     val glassColors = glassCardColors()
 
-    AlertDialog(
+    AuraAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -765,10 +776,7 @@ fun CollectionSongsDialog(
             TextButton(onClick = onDismiss) {
                 Text("Close", color = glassColors.accentColor)
             }
-        },
-        shape = RoundedCornerShape(32.dp),
-        containerColor = glassColors.backgroundColor,
-        modifier = Modifier.border(1.dp, glassColors.borderColor, RoundedCornerShape(32.dp))
+        }
     )
 }
 
@@ -779,18 +787,18 @@ fun AddToPlaylistDialog(
     onAdd: (Playlist) -> Unit
 ) {
     val glassColors = glassCardColors()
-    AlertDialog(
+    AuraAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                "Add to Playlist",
+                "Add to playlist",
                 fontWeight = FontWeight.Bold,
                 color = glassColors.textColor
             )
         },
         text = {
             if (playlists.isEmpty()) Text("Create a playlist in the Playlists tab to add songs.", color = glassColors.subTextColor)
-            LazyColumn(
+            else LazyColumn(
                 modifier = Modifier.heightIn(max = 300.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -820,10 +828,7 @@ fun AddToPlaylistDialog(
             TextButton(onClick = onDismiss) {
                 Text("Cancel", color = glassColors.accentColor)
             }
-        },
-        shape = RoundedCornerShape(32.dp),
-        containerColor = glassColors.backgroundColor,
-        modifier = Modifier.border(1.dp, glassColors.borderColor, RoundedCornerShape(32.dp))
+        }
     )
 }
 

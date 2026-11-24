@@ -130,7 +130,7 @@ fun PlaylistScreen(navController: NavController, viewModel: MainViewModel) {
         }
 
         playlistToDelete?.let { playlist ->
-            AlertDialog(
+            AuraAlertDialog(
                 onDismissRequest = { playlistToDelete = null },
                 title = { 
                     Text(
@@ -165,10 +165,7 @@ fun PlaylistScreen(navController: NavController, viewModel: MainViewModel) {
                     TextButton(onClick = { playlistToDelete = null }) { 
                         Text("Cancel", color = glassColors.accentColor) 
                     }
-                },
-                shape = RoundedCornerShape(24.dp),
-                containerColor = glassColors.backgroundColor,
-                modifier = Modifier.border(1.dp, glassColors.borderColor, RoundedCornerShape(24.dp))
+                }
             )
         }
     }
@@ -240,28 +237,23 @@ fun PlaylistItem(
         }
     }
     
-    DropdownMenu(
+    AuraDropdownMenu(
         expanded = showMenu, 
-        onDismissRequest = { showMenu = false },
-        shape = RoundedCornerShape(12.dp)
+        onDismissRequest = { showMenu = false }
     ) {
-        DropdownMenuItem(
-            text = { Text("Rename") },
-            leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
+        AuraMenuItem(
+            label = "Rename",
+            icon = Icons.Rounded.Edit,
             onClick = {
                 onRename(playlist)
                 showMenu = false
             }
         )
-        DropdownMenuItem(
-            text = { Text("Delete") },
-            leadingIcon = { 
-                Icon(
-                    Icons.Rounded.Delete, 
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error
-                ) 
-            },
+        AuraMenuDivider()
+        AuraMenuItem(
+            label = "Delete playlist",
+            icon = Icons.Rounded.DeleteOutline,
+            destructive = true,
             onClick = {
                 onDelete(playlist)
                 showMenu = false
@@ -280,7 +272,7 @@ fun CreateRenameDialog(
     var text by remember { mutableStateOf(initialValue) }
     val glassColors = glassCardColors()
 
-    AlertDialog(
+    AuraAlertDialog(
         onDismissRequest = onDismiss,
         title = { 
             Text(
@@ -320,9 +312,6 @@ fun CreateRenameDialog(
             TextButton(onClick = onDismiss) { 
                 Text("Cancel", color = glassColors.subTextColor) 
             }
-        },
-        shape = RoundedCornerShape(24.dp),
-        containerColor = glassColors.backgroundColor,
-        modifier = Modifier.border(1.dp, glassColors.borderColor, RoundedCornerShape(24.dp))
+        }
     )
 }

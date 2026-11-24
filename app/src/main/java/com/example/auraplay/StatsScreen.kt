@@ -88,7 +88,7 @@ fun StatsScreen(nav: NavController, viewModel: MainViewModel, onPlay: (List<Song
             if (mostPlayed.isEmpty()) item { Text("Play a song for 10 seconds to start your play counts.", Modifier.padding(horizontal = 20.dp), color = colors.subTextColor) }
             items(mostPlayed, key = { it.id }) { song ->
                 SongListItem(song, onSongSelected = { onPlay(mostPlayed, song) }, trailingContent = {
-                    Row(verticalAlignment = Alignment.CenterVertically) { Text("${song.playCount}", color = colors.accentColor); FeatureSongMenu(song, nav, viewModel) }
+                    Row(verticalAlignment = Alignment.CenterVertically) { Text("${song.playCount}", color = colors.accentColor); FeatureSongMenu(song, viewModel) }
                 })
             }
         }

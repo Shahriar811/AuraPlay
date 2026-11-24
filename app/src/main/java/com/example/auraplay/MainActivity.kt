@@ -272,8 +272,11 @@ class MainActivity : ComponentActivity() {
                             composable("smart_playlists") { SmartPlaylistsScreen(nav, viewModel) { tracks, song -> playSongs(nav, tracks, song) } }
                             composable("bookmarks") { BookmarksScreen(nav, viewModel) { song, position -> playSongs(nav, listOf(song), song, position) } }
                             composable("widget_styles") { WidgetStylesScreen(nav) }
-                            composable("song_edit/{songId}", arguments = listOf(navArgument("songId") { type = NavType.LongType })) { backStack ->
-                                SongEditorScreen(backStack.arguments?.getLong("songId") ?: 0L, nav, viewModel)
+                            // Keep old saved navigation states restorable after removing the editor.
+                            composable("song_edit/{songId}", arguments = listOf(navArgument("songId") { type = NavType.LongType })) {
+                                LaunchedEffect(Unit) {
+                                    if (!nav.popBackStack()) nav.navigate("home") { popUpTo(nav.graph.id) { inclusive = true } }
+                                }
                             }
                             composable("playlist_details/{playlistId}", arguments = listOf(navArgument("playlistId") { type = NavType.LongType })) { backStack ->
                                 val id = backStack.arguments?.getLong("playlistId") ?: 0L

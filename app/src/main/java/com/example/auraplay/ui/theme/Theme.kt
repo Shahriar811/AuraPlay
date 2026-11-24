@@ -3,6 +3,7 @@ package com.example.auraplay.ui.theme
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -15,6 +16,16 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
+
+private val AuraPlayShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(28.dp)
+)
 
 // 🎨 CompositionLocal to share the app-level dark theme state reactively
 val LocalThemeIsDark = staticCompositionLocalOf { false }
@@ -58,7 +69,7 @@ private val LightColorScheme = lightColorScheme(
     onSecondaryContainer = LightOnSurface,
     outline = LightOutline,
     outlineVariant = LightOutlineVariant,
-    error = LightAccentRuby,
+    error = Color(0xFFBA1A1A),
     onError = Color.White
 )
 
@@ -88,6 +99,19 @@ fun AuraPlayTheme(
             primary = primary,
             primaryContainer = lerp(colorScheme.surface, primary, if (darkTheme) 0.20f else 0.16f),
             onPrimaryContainer = colorScheme.onSurface,
+            // Material popups use these roles rather than surface. Set every level so
+            // menus, dialogs and sheets cannot fall back to Material's purple palette.
+            surfaceTint = primary,
+            surfaceContainerLowest = colorScheme.background,
+            surfaceContainerLow = lerp(colorScheme.surface, primary, if (darkTheme) 0.03f else 0.015f),
+            surfaceContainer = lerp(colorScheme.surface, primary, if (darkTheme) 0.05f else 0.03f),
+            surfaceContainerHigh = lerp(colorScheme.surface, primary, if (darkTheme) 0.08f else 0.05f),
+            surfaceContainerHighest = lerp(colorScheme.surface, primary, if (darkTheme) 0.12f else 0.08f),
+            surfaceBright = if (darkTheme) lerp(colorScheme.surface, colorScheme.onSurface, 0.10f) else colorScheme.surface,
+            surfaceDim = if (darkTheme) colorScheme.background else lerp(colorScheme.surface, colorScheme.onSurface, 0.08f),
+            inverseSurface = if (darkTheme) LightSurface else DarkSurface,
+            inverseOnSurface = if (darkTheme) LightOnSurface else DarkOnSurface,
+            inversePrimary = if (darkTheme) lerp(primary, Color(0xFF102012), 0.55f) else accentColor ?: DarkPrimary,
             background = if (darkTheme && pureBlack) Color.Black else colorScheme.background
         )
     }
@@ -98,6 +122,7 @@ fun AuraPlayTheme(
         MaterialTheme(
             colorScheme = themedColors,
             typography = Typography,
+            shapes = AuraPlayShapes,
             content = content
         )
     }

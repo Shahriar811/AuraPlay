@@ -305,7 +305,7 @@ private fun LyricsSearchDialog(song: Song, onDismiss: () -> Unit, onSearch: (Lyr
     var artist by rememberSaveable(song.id) {
         mutableStateOf(song.artist.takeUnless { it.equals("Unknown Artist", true) }.orEmpty().take(200))
     }
-    AlertDialog(
+    AuraAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Search lyrics") },
         text = {
@@ -611,7 +611,7 @@ fun PlaybackSpeedDialog(
     val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
     val glassColors = glassCardColors()
 
-    AlertDialog(
+    AuraAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
@@ -654,10 +654,7 @@ fun PlaybackSpeedDialog(
             TextButton(onClick = onDismiss) {
                 Text("Cancel", color = glassColors.accentColor)
             }
-        },
-        shape = RoundedCornerShape(24.dp),
-        containerColor = glassColors.backgroundColor,
-        modifier = Modifier.border(1.dp, glassColors.borderColor, RoundedCornerShape(24.dp))
+        }
     )
 }
 
@@ -672,7 +669,7 @@ fun SleepTimerDialog(
     val glassColors = glassCardColors()
     val presets = listOf(15, 30, 45, 60)
 
-    AlertDialog(
+    AuraAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
@@ -766,10 +763,7 @@ fun SleepTimerDialog(
             TextButton(onClick = onDismiss) {
                 Text("Close", color = glassColors.accentColor)
             }
-        },
-        shape = RoundedCornerShape(24.dp),
-        containerColor = glassColors.backgroundColor,
-        modifier = Modifier.border(1.dp, glassColors.borderColor, RoundedCornerShape(24.dp))
+        }
     )
 }
 

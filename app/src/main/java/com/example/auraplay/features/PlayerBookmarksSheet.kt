@@ -28,7 +28,10 @@ fun PlayerBookmarksSheet(song: Song, position: Long, vm: MainViewModel, onDismis
     val capturedPosition = remember(song.id) { position.coerceAtLeast(0) }
     var label by rememberSaveable(song.id) { mutableStateOf("") }
     var saved by remember { mutableStateOf(false) }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 0.dp) {
         Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Audio bookmarks", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis)

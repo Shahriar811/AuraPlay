@@ -97,10 +97,10 @@ Version 1.1.2 adds library multi-select playback and visible Equalizer, Bookmark
 
 * **Smart Playlists:** Recently added, unplayed discoveries, forgotten favorites, and this week's favorites.
 * **Music Folders:** Include selected folders and subfolders, or hide folders throughout library views.
-* **Song Information:** Edit title, artist, album, and cover within AuraPlay. Edits survive rescans and leave source audio files unchanged.
+* **Audio Info:** View the file name, location, format, bitrate, codec, size, duration, sample rate, and channels from the player or a song's menu.
 * **Audio Bookmarks:** Name timestamps in the player and find or play them from Playlists → Audio bookmarks.
 * **Listening Statistics:** Actual playback time, daily bars, weekly artist rankings, monthly summaries, and play counts.
-* **Portable Backup:** Export or merge playlists, likes, bookmarks, edits/covers, listening history, play counts, and settings with a ZIP file. Audio files are referenced rather than copied.
+* **Portable Backup:** Export or merge playlists, likes, bookmarks, listening history, play counts, and settings with a ZIP file. Audio files are referenced rather than copied.
 
 ### ⚡ Background Service & Widgets
 * **Media3 Foreground Service:** Seamless background playback powered by `MediaSessionService` and ExoPlayer.

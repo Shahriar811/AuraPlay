@@ -133,22 +133,6 @@ class MainViewModel(
         catch (_: Exception) { _featureMessage.value = "Could not save the bookmark. Check that the song is still available." }
     }
     fun deleteBookmark(bookmark: AudioBookmark) = viewModelScope.launch(Dispatchers.IO) { featureDao.deleteBookmark(bookmark) }
-    fun saveSongInfo(song: Song, title: String, artist: String, album: String, cover: Uri?, onSaved: () -> Unit) = viewModelScope.launch {
-        _featureBusy.value = true
-        try {
-            withContext(Dispatchers.IO) {
-                val artwork = cover?.let { CoverStore.save(getApplication(), it) } ?: song.albumArtUri
-                val edit = SongEdit(song.id, title.trim().take(2000).ifBlank { song.title }, artist.trim().take(2000).ifBlank { "Unknown Artist" }, album.trim().take(2000).ifBlank { "Unknown Album" }, artwork)
-                featureDao.saveEdit(edit)
-                playlistDao.updateMetadata(song.id, edit.title, edit.artist, edit.album, song.albumId, artwork, song.duration, song.data, song.folderPath, song.dateAdded)
-            }
-            playlistDao.getSongById(song.id).first()?.let { MusicService.refreshMetadata(it) }
-            onSaved()
-        } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { _featureMessage.value = error.message ?: "Could not save song information." }
-        finally { _featureBusy.value = false }
-    }
-    fun resetSongInfo(song: Song) = viewModelScope.launch(Dispatchers.IO) { featureDao.deleteEdit(song.id); refreshSongs() }
     fun exportBackup(uri: Uri) = runFeatureOperation {
         BackupManager(getApplication(), settingsDataStore).export(uri)
         "Backup saved."

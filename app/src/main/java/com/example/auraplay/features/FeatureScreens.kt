@@ -141,7 +141,7 @@ fun BackupScreen(nav: NavController, vm: MainViewModel) {
         Column(Modifier.fillMaxSize().padding(padding).padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Icon(Icons.Rounded.Backup, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(56.dp))
             Text("Keep your library yours", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text("Back up playlists, liked songs, bookmarks, listening history, settings and song edits. Audio files stay on your device.")
+            Text("Back up playlists, liked songs, bookmarks, listening history and settings. Audio files stay on your device.")
             Text("Restore merges saved items with this library. Songs are matched by file location or song information; unavailable tracks are skipped.", color = glassCardColors().subTextColor)
             Button(onClick = { exporter.launch("AuraPlay-backup-${LocalDate.now()}.zip") }, enabled = !busy && !scanning, modifier = Modifier.fillMaxWidth()) { Text("Export backup") }
             OutlinedButton(onClick = { importer.launch(arrayOf("application/zip", "application/octet-stream")) }, enabled = !busy && !scanning, modifier = Modifier.fillMaxWidth()) { Text("Restore backup") }
@@ -167,7 +167,7 @@ fun SmartPlaylistsScreen(nav: NavController, vm: MainViewModel, onPlay: (List<So
             }
             LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 16.dp)) {
                 if (tracks.isEmpty()) item { Text("This playlist will fill as you add and listen to music.", Modifier.padding(24.dp)) }
-                items(tracks, key = { it.id }) { song -> SongListItem(song, onSongSelected = { onPlay(tracks, song) }, trailingContent = { FeatureSongMenu(song, nav, vm) }) }
+                items(tracks, key = { it.id }) { song -> SongListItem(song, onSongSelected = { onPlay(tracks, song) }, trailingContent = { FeatureSongMenu(song, vm) }) }
             }
         }
     }
@@ -201,14 +201,16 @@ fun BookmarksScreen(nav: NavController, vm: MainViewModel, onPlay: (Song, Long) 
 }
 
 @Composable
-fun FeatureSongMenu(song: Song, nav: NavController, vm: MainViewModel) {
+fun FeatureSongMenu(song: Song, vm: MainViewModel) {
     var open by remember { mutableStateOf(false) }
+    var showAudioInfo by remember { mutableStateOf(false) }
+    if (showAudioInfo) AudioInfoDialog(song) { showAudioInfo = false }
     Box {
         IconButton(onClick = { open = true }) { Icon(Icons.Rounded.MoreVert, "Song actions") }
-        DropdownMenu(open, { open = false }) {
-            DropdownMenuItem(text = { Text("Play next") }, onClick = { vm.enqueue(song, true); open = false })
-            DropdownMenuItem(text = { Text("Add to queue") }, onClick = { vm.enqueue(song, false); open = false })
-            DropdownMenuItem(text = { Text("Edit song information") }, onClick = { nav.navigate("song_edit/${song.id}"); open = false })
+        if (open) AuraDropdownMenu(true, { open = false }) {
+            AuraMenuItem("Play next", icon = Icons.Rounded.SkipNext, onClick = { vm.enqueue(song, true); open = false })
+            AuraMenuItem("Add to queue", icon = Icons.Rounded.QueueMusic, onClick = { vm.enqueue(song, false); open = false })
+            AuraMenuItem("Audio info", icon = Icons.Rounded.Info, onClick = { showAudioInfo = true; open = false })
         }
     }
 }

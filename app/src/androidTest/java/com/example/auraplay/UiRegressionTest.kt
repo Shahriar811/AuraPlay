@@ -57,6 +57,29 @@ class UiRegressionTest {
         database.close()
     }
 
+    @Test fun homeSongMenuOpensAudioInfoAndHasNoEditor() {
+        val song = Song(9_000_001L, "Popup theme check", "Artist", albumArtUri = null,
+            duration = 60_000, data = "/Music/Popup theme check.mp3")
+        runBlocking { database.playlistDao().insertSongs(listOf(song)) }
+        compose.setContent {
+            AuraPlayTheme(darkTheme = false, accentColor = Color(0xFFFBBF24)) {
+                HomeScreen(rememberNavController(), viewModel, {}, { _, _ -> })
+            }
+        }
+        compose.waitUntil(10_000) { viewModel.songs.value.size == 1 }
+        compose.onNodeWithTag("library-list").performScrollToNode(hasTestTag("song-${song.id}"))
+        compose.onNode(hasContentDescription("Song options") and hasAnyAncestor(hasTestTag("song-${song.id}")))
+            .performClick()
+        compose.onNodeWithText("Edit song information").assertDoesNotExist()
+        compose.onNodeWithText("Audio info").performClick()
+        compose.onNodeWithTag("aura-dialog").assertIsDisplayed()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithText("File name").fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+        }
+        compose.onNodeWithText("Done").performClick()
+        compose.onNodeWithTag("aura-dialog").assertDoesNotExist()
+    }
+
     @Test fun searchOpensVisibleAndFocusedAfterScrolling() {
         runBlocking {
             database.playlistDao().insertSongs((0..79).map { index ->
@@ -74,7 +97,7 @@ class UiRegressionTest {
         compose.onNodeWithContentDescription("Search library").performClick()
         compose.onNode(hasSetTextAction()).assertIsDisplayed().assertIsFocused().performTextInput("Track 079")
         compose.waitUntil(10_000) { viewModel.songs.value.size == 1 }
-        compose.onNodeWithText("Track 079").assertIsDisplayed()
+        compose.onNodeWithTag("song-79").assertIsDisplayed().assertTextContains("Track 079")
         compose.onNode(hasSetTextAction()).assertIsDisplayed()
     }
 

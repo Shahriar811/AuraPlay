@@ -15,3 +15,5 @@ HSPLcom/example/auraplay/ui/theme/ManropeTypefaceLoader;->**(**)**
 HSPLcom/example/auraplay/ui/theme/ManropeTypefaceLoader$*;->**(**)**
 HSPLcom/example/auraplay/ui/MotionControlsKt;->**(**)**
 HSPLcom/example/auraplay/ui/PlaybackChromeKt;->**(**)**
+HSPLcom/example/auraplay/ui/PopupComponentsKt;->**(**)**
+HSPLcom/example/auraplay/ui/PopupComponentsKt$*;->**(**)**

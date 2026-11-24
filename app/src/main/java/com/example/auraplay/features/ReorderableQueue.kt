@@ -60,7 +60,10 @@ fun QueueBottomSheet(playerState: PlayerState, onDismiss: () -> Unit, onPlayQueu
         else rows = latestSource
         dragging = null; dragOffset = 0f; scrollJob?.cancel()
     }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
+    ModalBottomSheet(onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 0.dp) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             Text("Queue · ${rows.size}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text("Hold the handle to reorder. Tap a song to play it.", color = colors.subTextColor, modifier = Modifier.padding(vertical = 8.dp))
@@ -99,10 +102,14 @@ fun QueueBottomSheet(playerState: PlayerState, onDismiss: () -> Unit, onPlayQueu
                         }
                         Box {
                             IconButton(onClick = { menu = true }, enabled = dragging == null) { Icon(Icons.Rounded.MoreVert, "Queue actions") }
-                            DropdownMenu(menu, { menu = false }) {
-                                DropdownMenuItem(text = { Text("Move up") }, enabled = index > 0, onClick = { onMoveQueueItem(index, index - 1); menu = false })
-                                DropdownMenuItem(text = { Text("Move down") }, enabled = index < rows.lastIndex, onClick = { onMoveQueueItem(index, index + 1); menu = false })
-                                DropdownMenuItem(text = { Text("Remove from queue") }, onClick = { onRemoveQueueItem(index); menu = false })
+                            if (menu) AuraDropdownMenu(true, { menu = false }) {
+                                AuraMenuItem("Move up", icon = Icons.Rounded.ArrowUpward, enabled = index > 0,
+                                    onClick = { onMoveQueueItem(index, index - 1); menu = false })
+                                AuraMenuItem("Move down", icon = Icons.Rounded.ArrowDownward, enabled = index < rows.lastIndex,
+                                    onClick = { onMoveQueueItem(index, index + 1); menu = false })
+                                AuraMenuDivider()
+                                AuraMenuItem("Remove from queue", icon = Icons.Rounded.PlaylistRemove,
+                                    onClick = { onRemoveQueueItem(index); menu = false })
                             }
                         }
                     }

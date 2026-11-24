@@ -125,7 +125,7 @@ fun PlaylistDetailsScreen(
                             onSongSelected = { onSongSelected(song) },
                             trailingContent = {
                             Row {
-                            com.example.auraplay.features.FeatureSongMenu(song, navController, viewModel)
+                            com.example.auraplay.features.FeatureSongMenu(song, viewModel)
                                 IconButton(
                                     onClick = {
                                         viewModel.removeSongFromPlaylist(song, playlistData.playlist)

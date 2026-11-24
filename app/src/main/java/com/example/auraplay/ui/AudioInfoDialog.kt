@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -37,11 +36,8 @@ internal fun AudioInfoDialog(song: Song, onDismiss: () -> Unit) {
     val info by produceState<AudioFileInfo?>(null, song.id, song.data) {
         value = withContext(Dispatchers.IO) { readAudioFileInfo(context, song) }
     }
-    AlertDialog(
+    AuraAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        titleContentColor = MaterialTheme.colorScheme.onSurface,
-        textContentColor = MaterialTheme.colorScheme.onSurface,
         title = { Text("Audio info", style = MaterialTheme.typography.headlineSmall) },
         text = {
             val fileInfo = info
