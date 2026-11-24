@@ -183,12 +183,9 @@ class MainActivity : ComponentActivity() {
                             if (route != null && route != "player") {
                                 Column {
                                     HomeMiniPlayer(nav,
-                                        onPlayPause = { playerAction { if (it.isPlaying) it.pause() else it.playOrRetry() } },
+                                        onPlayPause = { playerAction { it.togglePlayPauseOrRetry() } },
                                         onNext = { playerAction { it.seekToNextOrRetry() } },
-                                        onPrevious = { playerAction {
-                                            it.seekToPreviousMediaItem()
-                                            it.prepareAfterSeek()
-                                        } })
+                                        onPrevious = { playerAction { it.seekToPreviousTrackOrRetry() } })
                                     NavigationBar(
                                         containerColor = MaterialTheme.colorScheme.surface,
                                         tonalElevation = 0.dp,
@@ -242,7 +239,7 @@ class MainActivity : ComponentActivity() {
                                 LaunchedEffect(Unit) { playerAction { } }
                                 val state by MusicService.playerState.collectAsStateWithLifecycle()
                                 PlayerScreen(nav, viewModel, state,
-                                    onPlayPause = { playerAction { if (it.isPlaying) it.pause() else it.playOrRetry() } },
+                                    onPlayPause = { playerAction { it.togglePlayPauseOrRetry() } },
                                     onSeek = { position -> playerAction { it.seekTo(position.toLong()) } },
                                     onNext = { playerAction { it.seekToNextOrRetry() } },
                                     onPrevious = { playerAction { it.seekToPreviousOrRetry() } },

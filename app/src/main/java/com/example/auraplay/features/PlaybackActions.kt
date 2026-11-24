@@ -2,9 +2,19 @@ package com.example.auraplay.features
 
 import androidx.media3.common.Player
 
+internal val Player.isPlayingOrBuffering: Boolean
+    get() = isPlaying || (playWhenReady && playbackState == Player.STATE_BUFFERING)
+
+fun Player.togglePlayPauseOrRetry() {
+    if (isPlayingOrBuffering) pause() else playOrRetry()
+}
+
 /** An error leaves ExoPlayer idle; play() alone cannot restart its renderers. */
 fun Player.playOrRetry() {
-    if (playbackState == Player.STATE_IDLE && mediaItemCount > 0) prepare()
+    when (playbackState) {
+        Player.STATE_IDLE -> if (mediaItemCount > 0) prepare()
+        Player.STATE_ENDED -> if (mediaItemCount > 0) seekToDefaultPosition()
+    }
     play()
 }
 
@@ -20,5 +30,10 @@ fun Player.seekToNextOrRetry() {
 
 fun Player.seekToPreviousOrRetry() {
     seekToPrevious()
+    prepareAfterSeek()
+}
+
+fun Player.seekToPreviousTrackOrRetry() {
+    seekToPreviousMediaItem()
     prepareAfterSeek()
 }

@@ -75,9 +75,13 @@ class MusicService : MediaSessionService(), Player.Listener {
         fun startSleepTimerEndOfTrack() { instance?.startTimer(0L, true) }
         fun cancelSleepTimer() { instance?.stopTimer() }
         fun setPlaybackSpeed(speed: Float) { instance?.player?.setPlaybackSpeed(speed.coerceIn(0.5f, 2f)) }
-        fun togglePlayPause() { instance?.player?.let { if (it.isPlaying) it.pause() else it.playOrRetry() } }
+        fun togglePlayPause() { instance?.player?.togglePlayPauseOrRetry() }
         fun seekToNext() { instance?.crossfade?.cancel(); instance?.player?.seekToNextOrRetry() }
         fun seekToPrevious() { instance?.crossfade?.cancel(); instance?.player?.seekToPreviousOrRetry() }
+        internal fun seekToPreviousTrack() {
+            instance?.crossfade?.cancel()
+            instance?.player?.seekToPreviousTrackOrRetry()
+        }
         fun playQueueItem(index: Int) { instance?.let { s -> s.crossfade.cancel(); s.player?.let { p -> AudioEngine.order(p).getOrNull(index)?.let { p.seekTo(it, 0); p.playOrRetry() } } } }
         fun removeQueueItem(index: Int) { instance?.let { s -> s.crossfade.cancel(); s.player?.let { p -> AudioEngine.order(p).getOrNull(index)?.let(p::removeMediaItem) } } }
         fun moveQueueItem(fromIndex: Int, toIndex: Int) { instance?.let { s -> s.crossfade.cancel(); s.player?.let { p ->
@@ -211,7 +215,7 @@ class MusicService : MediaSessionService(), Player.Listener {
         val duration = p.duration.takeIf { it > 0 } ?: song?.duration ?: 0
         _playerState.value = _playerState.value.copy(currentSong = song, currentQueueIndex = p.currentMediaItemIndex,
             currentPosition = p.currentPosition.coerceAtLeast(0), totalDuration = duration,
-            isPlaying = p.isPlaying || (p.playWhenReady && p.playbackState == Player.STATE_BUFFERING),
+            isPlaying = p.isPlayingOrBuffering,
             playbackSpeed = p.playbackParameters.speed, isShuffleOn = p.shuffleModeEnabled, repeatMode = p.repeatMode)
     }
 
@@ -295,7 +299,7 @@ class MusicService : MediaSessionService(), Player.Listener {
         sampleListening(); flushListening(); crossfade.cancel()
         beginListening(songFrom(mediaItem))
         if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) finishEndOfTrack()
-        publishState(); persistPlayback(); AuraPlayAppWidgetProvider.updateAllWidgets(this)
+        publishState(); persistPlayback()
     }
     override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
         if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_REMOVE) { crossfade.cancel(); persistPlayback() }
@@ -307,7 +311,11 @@ class MusicService : MediaSessionService(), Player.Listener {
         sampleListening(); publishState(); ensureEqualizer()
         if (!player.playWhenReady && ::crossfade.isInitialized) crossfade.cancel()
         if (events.contains(Player.EVENT_IS_PLAYING_CHANGED) || events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)) {
-            flushListening(); persistPlayback(); AuraPlayAppWidgetProvider.updateAllWidgets(this)
+            flushListening(); persistPlayback()
+        }
+        if (events.containsAny(Player.EVENT_IS_PLAYING_CHANGED, Player.EVENT_PLAY_WHEN_READY_CHANGED,
+                Player.EVENT_PLAYBACK_STATE_CHANGED, Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_MEDIA_METADATA_CHANGED)) {
+            AuraPlayAppWidgetProvider.updateAllWidgets(this)
         }
     }
     override fun onPlayerError(error: PlaybackException) {

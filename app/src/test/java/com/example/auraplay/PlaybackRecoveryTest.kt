@@ -7,6 +7,8 @@ import com.example.auraplay.features.PlaybackRecovery
 import com.example.auraplay.features.playOrRetry
 import com.example.auraplay.features.seekToNextOrRetry
 import com.example.auraplay.features.seekToPreviousOrRetry
+import com.example.auraplay.features.seekToPreviousTrackOrRetry
+import com.example.auraplay.features.togglePlayPauseOrRetry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.joinAll
@@ -39,6 +41,31 @@ class PlaybackRecoveryTest {
         assertFalse(playback.playWhenReady)
         playback.player.playOrRetry()
         assertTrue(playback.playWhenReady)
+    }
+
+    @Test fun playPauseCanCancelBufferingAndResumeWithoutPreparingAgain() {
+        val playback = TestPlayer().apply { state = Player.STATE_BUFFERING }
+        playback.player.togglePlayPauseOrRetry()
+        assertFalse(playback.playWhenReady)
+
+        playback.player.togglePlayPauseOrRetry()
+        assertTrue(playback.playWhenReady)
+        assertEquals(0, playback.prepareCount)
+    }
+
+    @Test fun playingAnEndedTrackSeeksToItsStart() {
+        val playback = TestPlayer().apply { state = Player.STATE_ENDED }
+        playback.player.togglePlayPauseOrRetry()
+        assertTrue(playback.seekedToStart)
+        assertTrue(playback.playWhenReady)
+    }
+
+    @Test fun previousTrackMovesToThePreviousItemEvenWhenPaused() {
+        val playback = TestPlayer().apply { index = 1; playWhenReady = false }
+        playback.player.seekToPreviousTrackOrRetry()
+        assertEquals(0, playback.index)
+        assertEquals(1, playback.prepareCount)
+        assertFalse(playback.playWhenReady)
     }
 
     @Test fun emptyQueueAndReadyPlayerDoNotPrepareAgain() {
@@ -129,6 +156,7 @@ class PlaybackRecoveryTest {
         var playWhenReady = true
         var error: PlaybackException? = TestPlaybackException(PlaybackException.ERROR_CODE_UNSPECIFIED)
         var prepareCount = 0
+        var seekedToStart = false
         fun fail(code: Int = PlaybackException.ERROR_CODE_UNSPECIFIED) {
             state = Player.STATE_IDLE
             error = TestPlaybackException(code)
@@ -141,10 +169,13 @@ class PlaybackRecoveryTest {
                 "getPlayerError" -> error
                 "getMediaItemCount" -> count
                 "getCurrentMediaItem" -> items.getOrNull(index).takeIf { count > 0 }
+                "isPlaying" -> playWhenReady && state == Player.STATE_READY
                 "seekToNext" -> { if (count > 0) index = (index + 1).coerceAtMost(count - 1); null }
-                "seekToPrevious" -> { index = (index - 1).coerceAtLeast(0); null }
+                "seekToPrevious", "seekToPreviousMediaItem" -> { index = (index - 1).coerceAtLeast(0); null }
+                "seekToDefaultPosition" -> { seekedToStart = true; state = Player.STATE_READY; null }
                 "prepare" -> { prepareCount++; state = Player.STATE_BUFFERING; error = null; null }
                 "play" -> { playWhenReady = true; null }
+                "pause" -> { playWhenReady = false; null }
                 "setPlayWhenReady" -> { playWhenReady = args!![0] as Boolean; null }
                 else -> throw UnsupportedOperationException(method.name)
             }
