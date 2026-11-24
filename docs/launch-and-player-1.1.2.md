@@ -61,3 +61,7 @@ Use the **performance** build variant in Android Studio for app performance chec
 - The player header opens **Audio info** with file name, location, type, bitrate, size, duration, codec, sample rate, and channel count when available. Estimated bitrates are labeled. **Speed** appears beside Equalizer, Bookmarks, and Sleep timer. Song editing remains available from the library's song menu.
 - Lyrics lookup handles null provider fields, Unicode metadata, alternate titles, and downloaded filenames. It checks embedded lyrics and sidecar LRC files, ranks online matches using artist and duration, and allows manual search or importing UTF-8 and UTF-16 lyrics files. Explicit refresh can replace imported lyrics with a successful online match. Songs without a matching source can still use imported lyrics.
 - Library list publication runs on a background scope. Artwork work is bounded, preference changes avoid unrelated library processing, and lyrics load when their view opens. The global theme applies each resolved accent directly.
+
+## Typography update — November 25, 2026
+
+AuraPlay bundles Manrope across all Material text styles. Headings, song details, controls, and dialogs share the same family with distinct sizes and weights. Audio info uses a semibold filename, a smaller location line, clearer field labels, and the app's neutral surface. The font license and upstream font log are packaged with the application.

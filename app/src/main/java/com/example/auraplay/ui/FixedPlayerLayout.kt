@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,8 +51,8 @@ internal fun FixedPlayerLayout(
 internal fun PlayerTrackDetails(title: String, artist: String, modifier: Modifier = Modifier) {
     val colors = glassCardColors()
     Column(modifier) {
-        Text(title, fontSize = 25.sp, lineHeight = 30.sp, fontWeight = FontWeight.ExtraBold,
-            letterSpacing = (-0.6).sp, color = colors.textColor,
+        Text(title, style = MaterialTheme.typography.headlineSmall, fontSize = 24.sp, lineHeight = 32.sp,
+            fontWeight = FontWeight.Bold, color = colors.textColor,
             minLines = 1, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.height(4.dp))
         Text(artist, fontSize = 16.sp, lineHeight = 24.sp, color = colors.subTextColor,

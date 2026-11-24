@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import com.example.auraplay.data.Song
 import com.example.auraplay.features.audioUri
@@ -38,7 +39,10 @@ internal fun AudioInfoDialog(song: Song, onDismiss: () -> Unit) {
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Audio info") },
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurface,
+        title = { Text("Audio info", style = MaterialTheme.typography.headlineSmall) },
         text = {
             val fileInfo = info
             if (fileInfo == null) {
@@ -49,8 +53,9 @@ internal fun AudioInfoDialog(song: Song, onDismiss: () -> Unit) {
                         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        AudioInfoField("File name", fileInfo.name)
-                        AudioInfoField("Location", fileInfo.location)
+                        AudioInfoField("File name", fileInfo.name, valueStyle = MaterialTheme.typography.titleSmall)
+                        AudioInfoField("Location", fileInfo.location, valueStyle = MaterialTheme.typography.bodySmall,
+                            secondary = true)
                         AudioInfoField("File type", fileInfo.type)
                         AudioInfoField("Bitrate", fileInfo.bitrate?.let { bitrate ->
                             val estimated = if (fileInfo.estimatedBitrate) " (estimated)" else ""
@@ -70,10 +75,16 @@ internal fun AudioInfoDialog(song: Song, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun AudioInfoField(label: String, value: String?) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+private fun AudioInfoField(
+    label: String,
+    value: String?,
+    valueStyle: TextStyle = MaterialTheme.typography.bodyMedium,
+    secondary: Boolean = false
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        Text(value ?: "Unavailable", style = MaterialTheme.typography.bodyMedium)
+        Text(value ?: "Unavailable", style = valueStyle,
+            color = if (secondary) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
     }
 }
 
