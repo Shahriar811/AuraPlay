@@ -9,4 +9,13 @@
     <string name="status_playing">Playing...</string>
     <string name="status_paused">Paused</string>
     <string name="status_stopped">Stopped</string>
+    <string name="widget_add_to_home">Add to home screen</string>
+    <string name="widget_add_from_launcher">Touch and hold an empty spot on your home screen, then open Widgets and choose AuraPlay.</string>
+    <string name="widget_description">Control AuraPlay from your home screen</string>
+    <string name="widget_resume_hint">Tap Play to resume</string>
+    <string name="widget_choose_track">Open AuraPlay and choose a track to play.</string>
+    <string name="widget_playback_unavailable">Couldn’t connect to playback. Try again.</string>
+    <string name="widget_resume">Resume</string>
+    <string name="widget_previous_track">Previous track</string>
+    <string name="widget_next_track">Next track</string>
 </resources>

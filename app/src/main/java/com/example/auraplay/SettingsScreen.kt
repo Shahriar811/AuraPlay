@@ -291,7 +291,7 @@ fun SettingsScreen(navController: NavController, viewModel: MainViewModel) {
             SettingsCategoryTitle("Library & backup", glassColors.subTextColor)
             SettingsLink(Icons.Rounded.Folder, "Music folders", "Choose folders to include or hide") { navController.navigate("music_folders") }
             SettingsLink(Icons.Rounded.Backup, "Backup & restore", "Playlists, likes, edits, history and settings") { navController.navigate("backup") }
-            SettingsLink(Icons.Rounded.Widgets, "Widget styles", "Compact, large and artwork layouts") { navController.navigate("widget_styles") }
+            SettingsLink(Icons.Rounded.Widgets, "Widget styles", "Add a home screen widget or change its style") { navController.navigate("widget_styles") }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()

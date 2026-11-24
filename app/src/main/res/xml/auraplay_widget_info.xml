@@ -11,5 +11,6 @@
     android:widgetFeatures="reconfigurable|configuration_optional"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget_auraplay"
-    android:description="@string/app_name"
+    android:previewLayout="@layout/widget_auraplay"
+    android:description="@string/widget_description"
     android:widgetCategory="home_screen" />

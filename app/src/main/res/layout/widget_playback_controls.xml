@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="wrap_content"
+    android:layout_height="48dp"
+    android:layout_gravity="center_horizontal"
+    android:gravity="center"
+    android:orientation="horizontal"
+    tools:ignore="UseAppTint">
+
+    <ImageButton
+        android:id="@+id/widget_btn_prev"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/widget_previous_track"
+        android:src="@drawable/ic_widget_previous"
+        android:tint="#F0F2EB" />
+
+    <ImageButton
+        android:id="@+id/widget_btn_play_pause"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="@drawable/widget_button_background"
+        android:contentDescription="@string/play"
+        android:src="@drawable/ic_widget_play"
+        android:tint="#20351F" />
+
+    <ImageButton
+        android:id="@+id/widget_btn_next"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/widget_next_track"
+        android:src="@drawable/ic_widget_next"
+        android:tint="#F0F2EB" />
+
+</LinearLayout>
