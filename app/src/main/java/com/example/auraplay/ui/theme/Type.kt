@@ -1,23 +1,54 @@
 package com.example.auraplay.ui.theme
 
+import android.content.Context
+import android.graphics.Paint
+import android.graphics.Typeface
 import androidx.compose.material3.Typography
-import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.AndroidFont
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontVariation
+import androidx.compose.ui.text.font.FontLoadingStrategy
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import androidx.core.content.res.ResourcesCompat
 import com.example.auraplay.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalTextApi::class)
-private val AuraPlayFont = FontFamily(
-    Font(R.font.manrope, FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
-    Font(R.font.manrope, FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
-    Font(R.font.manrope, FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
-    Font(R.font.manrope, FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
-    Font(R.font.manrope, FontWeight.ExtraBold, variationSettings = FontVariation.Settings(FontVariation.weight(800)))
+internal val AuraPlayFont = FontFamily(
+    ManropeFont(FontWeight.Normal),
+    ManropeFont(FontWeight.Medium),
+    ManropeFont(FontWeight.SemiBold),
+    ManropeFont(FontWeight.Bold),
+    ManropeFont(FontWeight.ExtraBold)
 )
+
+private class ManropeFont(override val weight: FontWeight) : AndroidFont(
+    loadingStrategy = FontLoadingStrategy.Async,
+    typefaceLoader = ManropeTypefaceLoader
+) {
+    override val style: FontStyle = FontStyle.Normal
+}
+
+private object ManropeTypefaceLoader : AndroidFont.TypefaceLoader {
+    private val loadMutex = Mutex()
+
+    override fun loadBlocking(context: Context, font: AndroidFont): Typeface? = null
+
+    override suspend fun awaitLoad(context: Context, font: AndroidFont): Typeface = withContext(Dispatchers.IO) {
+        // Async resolution can start undispatched during layout. Move the resource read itself off main.
+        loadMutex.withLock {
+            val base = ResourcesCompat.getFont(context, R.font.manrope) ?: error("Could not load Manrope")
+            Paint().apply {
+                typeface = base
+                fontVariationSettings = "'wght' ${font.weight.weight}"
+            }.typeface
+        }
+    }
+}
 
 // A shared family gives dialogs, controls, and song details the same typography.
 // Android's system fallback supplies glyphs for scripts outside Manrope, including Bengali.

@@ -1,6 +1,8 @@
 package com.example.auraplay
 
 import android.app.Application
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.createFontFamilyResolver
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
@@ -8,6 +10,8 @@ import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import com.example.auraplay.data.AppDatabase
 import com.example.auraplay.features.PlaybackSnapshot
+import com.example.auraplay.ui.theme.AuraPlayFont
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 
@@ -18,8 +22,14 @@ class AuraPlayApplication : Application(), ImageLoaderFactory {
     private val playbackWrites = Channel<PlaybackSnapshot?>(Channel.CONFLATED)
     private val equalizerWrites = Channel<String>(Channel.CONFLATED)
 
+    @OptIn(ExperimentalTextApi::class)
     override fun onCreate() {
         super.onCreate()
+        applicationScope.launch {
+            try { createFontFamilyResolver(this@AuraPlayApplication, coroutineContext).preload(AuraPlayFont) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { android.util.Log.w("AuraPlay", "Could not preload app font", error) }
+        }
         applicationScope.launch { for (snapshot in playbackWrites) {
             try { settingsDataStore.savePlaybackSnapshot(snapshot?.encode().orEmpty()) }
             catch (error: java.io.IOException) { android.util.Log.w("AuraPlay", "Could not save playback", error) }
