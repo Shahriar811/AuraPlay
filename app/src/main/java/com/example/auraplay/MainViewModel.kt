@@ -25,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.plus
 import java.io.File
 
 enum class SortOrder {
@@ -60,23 +61,6 @@ class MainViewModel(
     private var loadLyricsJob: Job? = null
     private var lyricsRequest = 0
 
-    init {
-        // Automatically load synced lyrics whenever active song changes
-        viewModelScope.launch {
-            MusicService.playerState
-                .map { it.currentSong?.id }
-                .distinctUntilChanged()
-                .collectLatest { id ->
-                    if (id != null) {
-                        val song = playlistDao.getSongById(id).first() ?: MusicService.playerState.value.currentSong
-                        loadLyrics(song, forceRefresh = false)
-                    } else {
-                        loadLyrics(null)
-                    }
-                }
-        }
-    }
-
     // Settings Flows
     val darkTheme: StateFlow<Boolean> = settingsDataStore.darkThemeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
@@ -102,26 +86,34 @@ class MainViewModel(
 
     val sleepTimerState = MusicService.sleepTimerState
 
-    // A single Room observer feeds every library view, instead of six simultaneous scans.
-    val librarySongs = playlistDao.getAllSongs().distinctUntilChanged()
-        .flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // Publish lists off the main thread too: StateFlow compares the old and new contents.
+    private val libraryScope = viewModelScope + Dispatchers.Default
+    val librarySongs = playlistDao.getAllSongs()
+        .stateIn(libraryScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val featureSettings = settingsDataStore.featureSettingsFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, FeatureSettings())
     val listeningEvents = featureDao.listeningEvents().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val bookmarks = featureDao.bookmarks().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val visibleLibrary = combine(librarySongs, featureSettings, filterShortAudio) { library, features, short ->
+    private val libraryFolderSettings = settingsDataStore.featureSettingsFlow.distinctUntilChanged { previous, current ->
+        previous.selectedFoldersOnly == current.selectedFoldersOnly &&
+            previous.includedFolders == current.includedFolders && previous.excludedFolders == current.excludedFolders
+    }
+    val visibleLibrary = combine(
+        librarySongs,
+        libraryFolderSettings,
+        settingsDataStore.filterShortAudioFlow.distinctUntilChanged()
+    ) { library, features, short ->
         library.filter { folderAllowed(it.folderPath, features) && (!short || it.duration >= 30_000L) }
-    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(libraryScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val queueRequests = Channel<Pair<Song, Boolean>>(Channel.BUFFERED)
     private val _featureMessage = MutableStateFlow<String?>(null)
     val featureMessage = _featureMessage.asStateFlow()
     private val _featureBusy = MutableStateFlow(false)
     val featureBusy = _featureBusy.asStateFlow()
 
-    val allFolders = librarySongs.map(::groupFolders).flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val allFolders = librarySongs.map(::groupFolders)
+        .stateIn(libraryScope, SharingStarted.WhileSubscribed(5000), emptyList())
     fun smartPlaylist(mode: SmartPlaylist): Flow<List<Song>> = combine(visibleLibrary, listeningEvents) { library, events ->
         smartSongs(mode, library, events, System.currentTimeMillis())
     }.flowOn(Dispatchers.Default)
@@ -197,23 +189,22 @@ class MainViewModel(
                 SortOrder.DATE_ADDED -> filteredSongs.sortedWith(compareByDescending<Song> { it.dateAdded }.thenByDescending { it.id })
             }
         }
-        .flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(libraryScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Library collections
     val playlists = playlistDao.getAllPlaylists().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val albums = songs.map(::groupAlbums).flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val artists = songs.map(::groupArtists).flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val folders = songs.map(::groupFolders).flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val albums = songs.map(::groupAlbums)
+        .stateIn(libraryScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val artists = songs.map(::groupArtists)
+        .stateIn(libraryScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val folders = songs.map(::groupFolders)
+        .stateIn(libraryScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val favoriteSongs = visibleLibrary.map { tracks -> tracks.filter { it.isFavorite }.sortedBy { it.title.lowercase(Locale.ROOT) } }
-        .flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(libraryScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val recentlyPlayed = visibleLibrary.map { tracks -> tracks.filter { it.lastPlayedTimestamp > 0 }.sortedByDescending { it.lastPlayedTimestamp }.take(30) }
-        .flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(libraryScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val mostPlayed = visibleLibrary.map { tracks -> tracks.filter { it.playCount > 0 }.sortedByDescending { it.playCount }.take(30) }
-        .flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(libraryScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun getCollectionSongs(collection: LibraryCollection): Flow<List<Song>> = combine(when (collection.type) {
         "album" -> playlistDao.getSongsByAlbumId(collection.key.toLong(), collection.name)
@@ -231,13 +222,14 @@ class MainViewModel(
 
     init {
         viewModelScope.launch {
-            combine(librarySongs, settingsDataStore.playbackSnapshotFlow.distinctUntilChanged(), featureSettings) { library, json, features ->
+            val resumePlayback = settingsDataStore.featureSettingsFlow.map { it.resumePlayback }.distinctUntilChanged()
+            combine(librarySongs, settingsDataStore.playbackSnapshotFlow.distinctUntilChanged(), resumePlayback) { library, json, resume ->
                 if (MusicService.getInstance() != null) null
                 else {
-                    val snapshot = if (features.resumePlayback) PlaybackSnapshot.decode(json) else null
+                    val snapshot = if (resume && library.isNotEmpty()) PlaybackSnapshot.decode(json) else null
                     resumePreviewState(snapshot?.let { restoreQueue(it.ids, it.index, it.position, library, it.order) }, snapshot)
                 }
-            }.flowOn(Dispatchers.Default).collect { preview ->
+            }.distinctUntilChanged().flowOn(Dispatchers.Default).collect { preview ->
                 preview?.let(MusicService::publishResumePreview)
             }
         }

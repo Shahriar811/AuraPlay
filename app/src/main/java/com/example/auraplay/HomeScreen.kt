@@ -5,6 +5,7 @@ import com.example.auraplay.ui.MotionButton as Button
 import com.example.auraplay.ui.MotionTextButton as TextButton
 import com.example.auraplay.ui.MotionFilterChip as FilterChip
 
+import android.content.Context
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -66,13 +67,24 @@ import com.example.auraplay.SortOrder
 import com.example.auraplay.data.*
 import com.example.auraplay.service.MusicService
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val SongItemShape = RoundedCornerShape(16.dp)
 private val SongThumbShape = RoundedCornerShape(12.dp)
+@OptIn(ExperimentalCoroutinesApi::class)
+private val libraryArtworkDispatcher = Dispatchers.IO.limitedParallelism(2)
+
+private fun libraryArtworkRequest(context: Context, uri: String?, width: Int, height: Int = width) =
+    ImageRequest.Builder(context)
+        .data(uri)
+        .size(width, height)
+        .dispatcher(libraryArtworkDispatcher)
+        .crossfade(false)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,7 +101,6 @@ fun HomeScreen(
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
     val scanError by viewModel.scanError.collectAsStateWithLifecycle()
-    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val activePlayingSongId by remember {
         MusicService.playerState.map { if (it.isPlaying) it.currentSong?.id else null }.distinctUntilChanged()
     }.collectAsStateWithLifecycle(initialValue = null)
@@ -130,6 +141,7 @@ fun HomeScreen(
     }
 
     songToAdd?.let { song ->
+        val playlists by viewModel.playlists.collectAsStateWithLifecycle()
         AddToPlaylistDialog(playlists, { songToAdd = null }) {
             viewModel.addSongToPlaylist(song, it)
             songToAdd = null
@@ -368,7 +380,7 @@ private fun DailyMixCard(songs: List<Song>, onPlay: () -> Unit) {
     val artwork = songs.firstOrNull()?.albumArtUri
     val context = LocalContext.current
     val request = remember(artwork, context) {
-        ImageRequest.Builder(context).data(artwork).size(720, 360).crossfade(false).build()
+        libraryArtworkRequest(context, artwork, 720, 360).build()
     }
     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 204.dp)
         .clip(RoundedCornerShape(28.dp)).background(colors.backgroundColor)) {
@@ -438,11 +450,7 @@ fun RecentSongCard(song: Song, onClick: () -> Unit) {
             } else {
                 val context = LocalContext.current
                 val imageRequest = remember(song.albumArtUri) {
-                    ImageRequest.Builder(context)
-                        .data(song.albumArtUri)
-                        .crossfade(false)
-                        .size(180, 180)
-                        .build()
+                    libraryArtworkRequest(context, song.albumArtUri, 180).build()
                 }
                 AsyncImage(
                     model = imageRequest,
@@ -506,11 +514,7 @@ fun AlbumGridCard(album: AlbumItem, onClick: () -> Unit) {
             } else {
                 val context = LocalContext.current
                 val imageRequest = remember(album.albumArtUri) {
-                    ImageRequest.Builder(context)
-                        .data(album.albumArtUri)
-                        .crossfade(false)
-                        .size(240, 240)
-                        .build()
+                    libraryArtworkRequest(context, album.albumArtUri, 240).build()
                 }
                 AsyncImage(
                     model = imageRequest,
@@ -832,7 +836,7 @@ fun HomeMiniPlayer(
     onPrevious: (() -> Unit)? = null
 ) {
     val snapshot by remember {
-        MusicService.playerState.miniPlayerSnapshots()
+        MusicService.playerState.miniPlayerSnapshots().flowOn(Dispatchers.Default)
     }.collectAsStateWithLifecycle(initialValue = MiniPlayerSnapshot())
     val direction = rememberTrackDirection(snapshot.trackKey, snapshot.playbackOrder)
     snapshot.song?.let { song ->
@@ -1197,10 +1201,7 @@ fun SongListItem(
                 } else {
                     val context = LocalContext.current
                     val imageRequest = remember(song.albumArtUri) {
-                        ImageRequest.Builder(context)
-                            .data(song.albumArtUri)
-                            .crossfade(false) // Instant appearance without CPU/GPU alpha blend overhead
-                            .size(120, 120) // Exact downsampling
+                        libraryArtworkRequest(context, song.albumArtUri, 120)
                             .error(R.drawable.ic_music_placeholder)
                             .build()
                     }

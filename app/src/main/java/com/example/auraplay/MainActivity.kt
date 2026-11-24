@@ -153,11 +153,14 @@ class MainActivity : ComponentActivity() {
             val dark by viewModel.darkTheme.collectAsStateWithLifecycle()
             val accent by viewModel.accentTheme.collectAsStateWithLifecycle()
             val pureBlack by viewModel.pureBlack.collectAsStateWithLifecycle()
-            val artwork by remember {
-                MusicService.playerState.map { it.currentSong?.albumArtUri }.distinctUntilChanged()
-            }.collectAsStateWithLifecycle(initialValue = null)
-            val palette = rememberDominantColors(this, if (accent == "DYNAMIC") artwork else null)
-            val effectiveAccent = resolveAccentColor(accent, palette.dominantColor)
+            val effectiveAccent = if (accent == "DYNAMIC") {
+                val artwork by remember {
+                    MusicService.playerState.map { it.currentSong?.albumArtUri }.distinctUntilChanged()
+                }.collectAsStateWithLifecycle(initialValue = null)
+                resolveAccentColor(accent, rememberDominantColors(this, artwork).dominantColor)
+            } else {
+                resolveAccentColor(accent)
+            }
             SideEffect {
                 WindowInsetsControllerCompat(window, window.decorView).apply {
                     isAppearanceLightStatusBars = !dark

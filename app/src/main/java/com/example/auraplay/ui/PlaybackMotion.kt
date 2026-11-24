@@ -28,6 +28,7 @@ internal fun PlayerState.trackMotionKey(): Any? = queueKeys.getOrNull(currentQue
 internal fun rememberTrackDirection(trackKey: Any?, playbackOrder: List<Any>): Int {
     val history = remember { TrackMotionHistory(trackKey, playbackOrder) }
     val direction = remember(trackKey) {
+        if (history.key == trackKey) return@remember 1
         val before = history.order.indexOf(history.key)
         val after = history.order.indexOf(trackKey)
         when {

@@ -2,8 +2,6 @@ package com.example.auraplay.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.darkColorScheme
@@ -12,7 +10,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -83,16 +81,16 @@ fun AuraPlayTheme(
         else -> LightColorScheme
     }
 
-    val animatedAccent by animateColorAsState(
-        targetValue = accentColor?.let { if (darkTheme) it else lerp(it, Color(0xFF102012), 0.55f) } ?: colorScheme.primary,
-        animationSpec = tween(360), label = "artwork-accent"
-    )
-    val themedColors = colorScheme.copy(
-        primary = animatedAccent,
-        primaryContainer = lerp(colorScheme.surface, animatedAccent, if (darkTheme) 0.20f else 0.16f),
-        onPrimaryContainer = colorScheme.onSurface,
-        background = if (darkTheme && pureBlack) Color.Black else colorScheme.background
-    )
+    val themedColors = remember(colorScheme, darkTheme, accentColor, pureBlack) {
+        // A frame-by-frame change here invalidates every color consumer, including scrolling rows.
+        val primary = accentColor?.let { if (darkTheme) it else lerp(it, Color(0xFF102012), 0.55f) } ?: colorScheme.primary
+        colorScheme.copy(
+            primary = primary,
+            primaryContainer = lerp(colorScheme.surface, primary, if (darkTheme) 0.20f else 0.16f),
+            onPrimaryContainer = colorScheme.onSurface,
+            background = if (darkTheme && pureBlack) Color.Black else colorScheme.background
+        )
+    }
     CompositionLocalProvider(
         LocalThemeIsDark provides darkTheme,
         LocalContentColor provides themedColors.onBackground

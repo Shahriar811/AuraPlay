@@ -107,6 +107,7 @@ fun PlayerScreen(
     val repeatBackground by animateColorAsState(if (playerState.repeatMode != 0) colors.accentColor.copy(alpha = 0.12f) else Color.Transparent,
         tween(200), label = "repeat-background")
 
+    LaunchedEffect(songId, showLyrics) { if (showLyrics) viewModel.loadLyrics(song) }
     LaunchedEffect(feedback) { if (feedback != null) { delay(900); feedback = null } }
     if (showSpeed) PlaybackSpeedDialog(playerState.playbackSpeed, { viewModel.setPlaybackSpeed(it); showSpeed = false }, { showSpeed = false })
     if (showTimer) SleepTimerDialog(sleepTimer,
