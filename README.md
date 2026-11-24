@@ -26,8 +26,12 @@
 ## 📥 Download & Installation
 
 1. Go to the [**Latest Releases**](https://github.com/Shahriar811/AuraPlay/releases/latest) page.
-2. Download `app-debug.apk` (or `AuraPlay.apk`).
+2. Download the optimized `app-performance.apk` (or `AuraPlay.apk`).
 3. Open the downloaded file on your Android device and tap **Install** (allow *Install from Unknown Sources* if prompted).
+
+For compilation before the first launch on Android 9+, download and extract the complete **AuraPlay-Optimized-APK** Actions artifact, connect your device with USB debugging enabled, and run `./scripts/install-optimized.ps1` in PowerShell from the extracted directory. The installer selects the matching DEX metadata for your Android version and updates AuraPlay while retaining app data. Use `-Serial DEVICE_ID` to select among connected devices.
+
+The APK contains a Baseline Profile. Installing the APK by itself can leave that profile waiting for Android's idle compilation job, which allows first-use compilation to compete with scrolling. Installing the APK with its matching `.dm` file applies the profile during installation. Android Studio's **performance** variant and `./gradlew installPerformance` also install the generated metadata. [Android Baseline Profile installation](https://developer.android.com/topic/performance/baselineprofiles/manually-create-measure)
 
 
 ---
@@ -170,6 +174,10 @@ com.example.auraplay/
    ```
 
 For an installable build with release optimizations, use `./gradlew assemblePerformance`. Run `./gradlew testDebugUnitTest lintDebug` for regression tests and static checks. The optimized APK is generated at `app/build/outputs/apk/performance/app-performance.apk`.
+
+Keep `output-metadata.json` and the generated `baselineProfiles/` directory with that APK. To install the local build with its compilation profile from Windows, run `./scripts/install-optimized.ps1`. The script finds ADB through PATH, Android SDK environment variables, or this checkout's `local.properties`. Supply `-AdbPath PATH_TO_ADB` when needed. Its final output reports Android's compilation state.
+
+To compare three cold launches with warmed-up scrolling on a connected device, run `python scripts/measure-startup-scroll.py --adb PATH_TO_ADB` with a populated library. Keep AuraPlay in the foreground and close floating overlays. The check preserves app data, stops gestures if another window takes focus, and saves frame reports and `summary.json` under `app/build/reports/startup-scroll/check/`.
 
 ---
 

@@ -73,3 +73,29 @@ Settings → Widget styles offers Compact, Large, Square (2×2), and Artwork lay
 The compact widget's playback controls now share the artwork's vertical center. A narrow layout keeps all three 48dp controls visible at the minimum supported width. Widget backgrounds identify their custom outlines to compatible launchers so the selected corner shape is retained on the home screen.
 
 All 58 JVM tests passed. Five native widget checks passed on the Pixel 7 Pro, covering compact alignment, minimum square and narrow sizes, corner outlines, and saved per-widget appearance. The optimized APK and Android test APK built successfully, and lint reported zero errors with 71 warnings.
+
+## Compilation before first launch — November 25, 2026
+
+The optimized APK contained its Baseline Profile, including Compose and Coil paths, but the APK-only installation on the Pixel still reported ART status `verify`. AGP also generated version-specific `.dm` files beside the APK. The Actions artifact uploaded only the APK, so those install-time compilation files were omitted. ProfileInstaller queues an embedded profile several seconds after launch, and Android can compile it later during idle optimization. Installing the matching APK and DEX metadata together makes the profile available during installation. [Android profile installation guidance](https://developer.android.com/topic/performance/baselineprofiles/manually-create-measure)
+
+Installing the same optimized APK with its matching `.dm` changed the Pixel's state to `speed-profile` with reason `install-dm`. In the paired 12-second traces, the first frame fell from 149 ms to 87 ms, its initial measurement work from 67 ms to 42 ms, and app baseline JIT compilation time from 1,330 ms to 247 ms. The 95th-percentile scrolling frame fell from 9 ms to 8 ms. These measurements describe the connected Pixel and its existing library.
+
+The **AuraPlay-Optimized-APK** Actions artifact now includes the complete APK output, its metadata, the Android-specific profiles, and `scripts/install-optimized.ps1`. Extract it and run `./scripts/install-optimized.ps1` from the extracted root in PowerShell. The script checks the profile's DEX keys and checksums against the APK, selects the device's Android version, installs the pair together on API 28+, and reports compilation state. Android 8 devices use the APK update path. Android Studio's **performance** variant and `./gradlew installPerformance` also install the generated metadata. Debug builds remain intended for development.
+
+Installer checks passed in Windows PowerShell 5.1 and PowerShell 7 with simulated Android API levels 27, 30, and 31. A simulated extracted Actions artifact resolved its bundled files correctly, and mismatched APK/profile checksums were rejected before installation.
+
+## Font loading and cold-launch verification — version 1.1.3
+
+The bundled variable font's five weights used Compose's default blocking resource loader. First-use resource loading could therefore happen inside UI layout. The family now uses an asynchronous loader that explicitly moves resource reads and weight creation to `Dispatchers.IO`. Application startup preloads the family into Compose's shared cache. A mutex avoids concurrent parsing of the same cold resource. The font, sizes, weights, and system fallback for Bengali remain the same.
+
+After the font change and installation with matching metadata, the Pixel's longest launch frame was 61 ms and initial measurement took 22 ms. Three additional cold launches produced the following complete launch-and-scroll results. Each cold run force-stopped the app, opened the existing library, and immediately performed six swipes. Each warm run returned up the list and repeated those swipes in the same process.
+
+| Run | Cold frames | Cold jank | Cold p95 | Warm frames | Warm jank | Warm p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 361 | 0.55% | 9 ms | 368 | 0.27% | 8 ms |
+| 2 | 339 | 0.59% | 8 ms | 355 | 0.28% | 9 ms |
+| 3 | 323 | 0.62% | 8 ms | 381 | 0.26% | 8 ms |
+
+The retained launch frame is still longer than a display interval. These checks establish improvement on this Pixel and library, rather than a guarantee for every device. `scripts/measure-startup-scroll.py` reproduces the comparison, rejects debuggable builds, stops gestures when AuraPlay loses window focus, and writes raw frame reports plus a JSON summary.
+
+Validation passed with 58 JVM tests, the device font regression test, both APK builds, and lint with zero errors and 71 existing warnings. The font test verifies that all five weights resolve to the bundled family after preloading and that regular and extra-bold weights render different glyphs. The actual installer succeeded on Android API 37 and reported `speed-profile` / `install-dm`. Version 1.1.3 (code 5) is installed on the connected phone with existing app data retained.
