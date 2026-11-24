@@ -28,6 +28,13 @@ jobs:
       - name: Test, lint, and build APKs
         run: ./gradlew testDebugUnitTest lintDebug assembleDebug assemblePerformance --no-daemon
 
+      - name: Verify optimized installation files
+        run: |
+          test -s app/build/outputs/apk/performance/app-performance.apk
+          test -s app/build/outputs/apk/performance/output-metadata.json
+          test -s app/build/outputs/apk/performance/baselineProfiles/0/app-performance.dm
+          test -s app/build/outputs/apk/performance/baselineProfiles/1/app-performance.dm
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -38,4 +45,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AuraPlay-Optimized-APK
-          path: app/build/outputs/apk/performance/app-performance.apk
+          path: |
+            app/build/outputs/apk/performance/
+            scripts/install-optimized.ps1
+          if-no-files-found: error
