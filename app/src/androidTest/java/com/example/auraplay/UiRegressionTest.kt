@@ -25,6 +25,8 @@ import androidx.navigation.compose.*
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.auraplay.data.AppDatabase
+import com.example.auraplay.data.Playlist
+import com.example.auraplay.data.PlaylistSongCrossRef
 import com.example.auraplay.data.Song
 import com.example.auraplay.service.PlayerState
 import com.example.auraplay.service.SleepTimerState
@@ -99,6 +101,46 @@ class UiRegressionTest {
         compose.waitUntil(10_000) { viewModel.songs.value.size == 1 }
         compose.onNodeWithTag("song-79").assertIsDisplayed().assertTextContains("Track 079")
         compose.onNode(hasSetTextAction()).assertIsDisplayed()
+    }
+
+    @Test fun playlistSearchFiltersOnlyPlaylistSongsAndRestoresTheListWhenClosed() {
+        val first = Song(1, "Morning Run", "Hills", "First Light", albumArtUri = null,
+            duration = 60_000, data = "/Music/morning.mp3")
+        val second = first.copy(id = 2, title = "Evening Walk", artist = "Town", album = "Nightfall")
+        val outside = first.copy(id = 3, title = "Outside the playlist")
+        val playlistId = runBlocking {
+            val dao = database.playlistDao()
+            dao.insertSongs(listOf(first, second, outside))
+            val id = dao.insertPlaylist(Playlist(name = "Workout"))
+            dao.addSongsToPlaylist(listOf(PlaylistSongCrossRef(id, first.id), PlaylistSongCrossRef(id, second.id)))
+            id
+        }
+        var selectedSong: Song? = null
+        compose.setContent {
+            AuraPlayTheme(darkTheme = false) {
+                PlaylistDetailsScreen(playlistId, rememberNavController(), viewModel) { selectedSong = it }
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithText(first.title).fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+        }
+        compose.onNodeWithContentDescription("Search playlist").performClick()
+        val search = compose.onNode(hasSetTextAction())
+        search.assertIsFocused().performTextInput("  HILLS  ")
+        compose.onNodeWithText(first.title).assertIsDisplayed()
+        compose.onNodeWithText(second.title).assertDoesNotExist()
+        compose.onNodeWithText(outside.title).assertDoesNotExist()
+
+        search.performTextReplacement("nightfall")
+        compose.onNodeWithText(second.title).assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(second.id, selectedSong?.id) }
+        search.performTextReplacement("missing title")
+        compose.onNodeWithText("No matching songs").assertIsDisplayed()
+
+        compose.onNodeWithContentDescription("Close search").performClick()
+        search.assertDoesNotExist()
+        compose.onNodeWithText(first.title).assertIsDisplayed()
+        compose.onNodeWithText(second.title).assertIsDisplayed()
     }
 
     @Test fun multiSelectSurvivesSearchAndRecreationAndPlaysOnlyChosenSongs() {

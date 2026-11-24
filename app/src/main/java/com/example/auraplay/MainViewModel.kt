@@ -159,15 +159,7 @@ class MainViewModel(
 
     val songs: StateFlow<List<Song>> =
         combine(visibleLibrary, _searchQuery, _sortOrder) { songsFromDb, query, order ->
-            val filteredSongs = if (query.isBlank()) {
-                songsFromDb
-            } else {
-                songsFromDb.filter {
-                    it.title.contains(query, ignoreCase = true) ||
-                            it.artist.contains(query, ignoreCase = true) ||
-                            it.album.contains(query, ignoreCase = true)
-                }
-            }
+            val filteredSongs = songsFromDb.filterBySongQuery(query)
             when (order) {
                 SortOrder.TITLE -> filteredSongs.sortedBy { it.title.lowercase(Locale.ROOT) }
                 SortOrder.ARTIST -> filteredSongs.sortedBy { it.artist.lowercase(Locale.ROOT) }

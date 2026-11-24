@@ -4,6 +4,15 @@ import java.util.Locale
 
 data class LibraryCollection(val type: String, val name: String, val key: String)
 
+internal fun List<Song>.filterBySongQuery(query: String): List<Song> {
+    if (query.isBlank()) return this
+    return filter { song ->
+        song.title.contains(query, ignoreCase = true) ||
+            song.artist.contains(query, ignoreCase = true) ||
+            song.album.contains(query, ignoreCase = true)
+    }
+}
+
 fun groupAlbums(songs: List<Song>): List<AlbumItem> = songs.groupBy { it.albumId to it.album }
     .map { (_, tracks) ->
         val first = tracks.first()

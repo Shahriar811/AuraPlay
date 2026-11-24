@@ -20,7 +20,12 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 
 @Composable
-internal fun LibrarySearchField(query: String, onQueryChange: (String) -> Unit, onClose: () -> Unit) {
+internal fun LibrarySearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    placeholder: String = "Songs, albums, artists",
+    onClose: () -> Unit
+) {
     val requester = remember { FocusRequester() }
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -31,7 +36,7 @@ internal fun LibrarySearchField(query: String, onQueryChange: (String) -> Unit, 
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
-        placeholder = { Text("Songs, albums, artists") },
+        placeholder = { Text(placeholder) },
         singleLine = true,
         leadingIcon = { Icon(Icons.Rounded.Search, null) },
         trailingIcon = {
