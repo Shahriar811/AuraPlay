@@ -115,18 +115,20 @@ class UiRegressionTest {
         var equalizer = 0
         var bookmarks = 0
         var timer = 0
+        var speed = 0
         compose.setContent {
             AuraPlayTheme(darkTheme = false) {
                 Box(Modifier.width(320.dp)) {
-                    PlayerQuickActions(SleepTimerState(isActive = true, isEndOfTrack = true),
-                        { equalizer++ }, { bookmarks++ }, { timer++ })
+                    PlayerQuickActions(SleepTimerState(isActive = true, isEndOfTrack = true), 1.25f,
+                        { equalizer++ }, { bookmarks++ }, { timer++ }, { speed++ })
                 }
             }
         }
         compose.onNodeWithText("Equalizer").assertIsDisplayed().performClick()
         compose.onNodeWithText("Bookmarks").assertIsDisplayed().performClick()
         compose.onNodeWithText("Sleep timer").assertIsDisplayed().assertIsSelected().performClick()
-        compose.runOnIdle { assertEquals(1, equalizer); assertEquals(1, bookmarks); assertEquals(1, timer) }
+        compose.onNodeWithText("Speed").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(1, equalizer); assertEquals(1, bookmarks); assertEquals(1, timer); assertEquals(1, speed) }
     }
 
     @Test fun queueHighlightTracksAccentAndMarksOnlyThePlayingOccurrence() {
@@ -167,6 +169,25 @@ class UiRegressionTest {
         compose.onNodeWithText("Sleep timer").assertIsDisplayed().performClick()
         compose.onNodeWithText("Sleep Timer").assertIsDisplayed()
         compose.onNodeWithText("End of Current Song").assertIsDisplayed()
+    }
+
+    @Test fun playerOpensAudioInfoFromHeaderAndPlaybackSpeedFromShortcut() {
+        val song = Song(999, "Track", "Artist", albumArtUri = null, duration = 180_000, data = "/Music/Track.mp3")
+        compose.setContent {
+            AuraPlayTheme {
+                Box(Modifier.size(340.dp, 600.dp)) {
+                    PlayerScreen(rememberNavController(), viewModel, PlayerState(currentSong = song), {}, {}, {}, {}, {}, {})
+                }
+            }
+        }
+        compose.onNodeWithText("Speed").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Playback Speed").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithContentDescription("Audio info").performClick()
+        compose.onNodeWithText("Audio info").assertIsDisplayed()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("File name").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Track.mp3").assertExists()
+        compose.onNodeWithText("/Music/Track.mp3").assertExists()
     }
 
     @Test fun miniPlayerSwipesChangeTracksOnceWithoutOpeningThePlayer() {

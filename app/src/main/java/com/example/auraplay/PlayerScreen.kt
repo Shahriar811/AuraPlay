@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -88,7 +89,7 @@ fun PlayerScreen(
     var showTimer by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
     var showBookmarks by remember { mutableStateOf(false) }
-    var showMenu by remember { mutableStateOf(false) }
+    var showAudioInfo by remember(songId) { mutableStateOf(false) }
     var showLyricsSearch by remember(songId) { mutableStateOf(false) }
     var importSongId by rememberSaveable { mutableStateOf<Long?>(null) }
     val importLyrics = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -128,6 +129,7 @@ fun PlayerScreen(
         onMoveQueueItem = { from, to -> com.example.auraplay.service.MusicService.moveQueueItem(from, to) })
     if (showBookmarks && song != null) com.example.auraplay.features.PlayerBookmarksSheet(song, playerState.currentPosition, viewModel,
         onDismiss = { showBookmarks = false }, onSeek = { onSeek(it.toFloat()); showBookmarks = false })
+    if (showAudioInfo && song != null) AudioInfoDialog(song) { showAudioInfo = false }
     if (showLyricsSearch && song != null) LyricsSearchDialog(song, onDismiss = { showLyricsSearch = false }) { search ->
         showLyricsSearch = false
         viewModel.loadLyrics(song, search = search)
@@ -154,12 +156,8 @@ fun PlayerScreen(
                             color = colors.textColor)
                         Text("Your library", color = colors.subTextColor, fontSize = 12.sp)
                     }
-                    Box {
-                        FilledTonalIconButton(onClick = { showMenu = true }, shape = CircleShape) { Icon(Icons.Rounded.MoreVert, "Player options") }
-                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                            DropdownMenuItem(text = { Text("Edit song information") }, onClick = { showMenu = false; navController.navigate("song_edit/${song.id}") })
-                            DropdownMenuItem(text = { Text("Playback speed · ${playerState.playbackSpeed}x") }, onClick = { showMenu = false; showSpeed = true })
-                        }
+                    FilledTonalIconButton(onClick = { showAudioInfo = true }, shape = CircleShape) {
+                        Icon(Icons.Rounded.Info, "Audio info")
                     }
                 }
             },
@@ -268,9 +266,10 @@ fun PlayerScreen(
                         }
                         FilledTonalIconButton(onClick = onNext, modifier = Modifier.size(54.dp)) { Icon(Icons.Rounded.SkipNext, "Next track") }
                     }
-                    PlayerQuickActions(sleepTimer,
+                    PlayerQuickActions(sleepTimer, playerState.playbackSpeed,
                         onEqualizer = { navController.navigate("equalizer") },
-                        onBookmarks = { showBookmarks = true }, onSleepTimer = { showTimer = true })
+                        onBookmarks = { showBookmarks = true }, onSleepTimer = { showTimer = true },
+                        onPlaybackSpeed = { showSpeed = true })
                     Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedButton(onClick = onToggleShuffle, shape = CircleShape, modifier = Modifier.weight(1f).semantics {
                             selected = playerState.isShuffleOn
@@ -327,41 +326,38 @@ private fun LyricsSearchDialog(song: Song, onDismiss: () -> Unit, onSearch: (Lyr
 @Composable
 internal fun PlayerQuickActions(
     sleepTimer: SleepTimerState,
+    playbackSpeed: Float,
     onEqualizer: () -> Unit,
     onBookmarks: () -> Unit,
-    onSleepTimer: () -> Unit
+    onSleepTimer: () -> Unit,
+    onPlaybackSpeed: () -> Unit
 ) {
-    val colors = glassCardColors()
     Row(Modifier.fillMaxWidth().testTag("player-quick-actions"), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        TextButton(onClick = onEqualizer, modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-            contentPadding = PaddingValues(4.dp)) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Rounded.Equalizer, null, modifier = Modifier.size(22.dp))
-                Text("Equalizer", fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-        TextButton(onClick = onBookmarks, modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-            contentPadding = PaddingValues(4.dp)) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Rounded.Bookmarks, null, modifier = Modifier.size(22.dp))
-                Text("Bookmarks", fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-        TextButton(onClick = onSleepTimer, modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics {
+        PlayerShortcut("Equalizer", Icons.Rounded.Equalizer, onEqualizer, Modifier.weight(1f))
+        PlayerShortcut("Bookmarks", Icons.Rounded.Bookmarks, onBookmarks, Modifier.weight(1f))
+        PlayerShortcut("Sleep timer", Icons.Rounded.Timer, onSleepTimer, Modifier.weight(1f).semantics {
             selected = sleepTimer.isActive
             stateDescription = when {
                 sleepTimer.isEndOfTrack -> "Pauses at end of track"
                 sleepTimer.isActive -> "Sleep timer active"
                 else -> "Sleep timer off"
             }
-        }, contentPadding = PaddingValues(4.dp),
-            colors = ButtonDefaults.textButtonColors(
-                containerColor = if (sleepTimer.isActive) colors.accentColor.copy(alpha = 0.14f) else Color.Transparent
-            )) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Rounded.Timer, null, modifier = Modifier.size(22.dp))
-                Text("Sleep timer", fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
+        }, highlighted = sleepTimer.isActive)
+        PlayerShortcut("Speed", Icons.Rounded.Speed, onPlaybackSpeed, Modifier.weight(1f).semantics {
+            stateDescription = "Playback speed ${playbackSpeed}x"
+        }, highlighted = playbackSpeed != 1f)
+    }
+}
+
+@Composable
+private fun PlayerShortcut(label: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier, highlighted: Boolean = false) {
+    TextButton(onClick = onClick, modifier = modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(4.dp),
+        colors = ButtonDefaults.textButtonColors(containerColor = if (highlighted) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+        } else Color.Transparent)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(icon, null, modifier = Modifier.size(22.dp))
+            Text(label, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
         }
     }
 }
