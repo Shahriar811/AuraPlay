@@ -22,7 +22,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -496,6 +502,25 @@ fun CreditsSection(glassColors: com.example.auraplay.ui.GlassCardColors) {
                 "Mail: mdshahriarhossain08@gmail.com",
                 style = MaterialTheme.typography.bodyMedium,
                 color = glassColors.subTextColor
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = buildAnnotatedString {
+                    withLink(
+                        LinkAnnotation.Url(
+                            url = "https://github.com/Shahriar811",
+                            styles = TextLinkStyles(
+                                style = SpanStyle(
+                                    color = glassColors.accentColor,
+                                    textDecoration = TextDecoration.Underline
+                                )
+                            )
+                        )
+                    ) {
+                        append("GitHub · @Shahriar811")
+                    }
+                },
+                style = MaterialTheme.typography.bodyMedium
             )
         }
     }

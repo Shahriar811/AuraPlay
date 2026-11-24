@@ -228,7 +228,7 @@ fun HomeScreen(
                     }
                     IconButton(onClick = { navController.navigate("settings") },
                         modifier = Modifier.background(colors.accentColor.copy(alpha = 0.16f), CircleShape)) {
-                        Icon(Icons.Rounded.PersonOutline, "Settings", tint = colors.accentColor)
+                        Icon(Icons.Rounded.Settings, "Settings", tint = colors.accentColor)
                     }
                 }
                 if (showSearch) LibrarySearchField(searchQuery, viewModel::onSearchQueryChange) {
