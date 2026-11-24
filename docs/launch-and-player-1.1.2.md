@@ -45,3 +45,19 @@ No Android device or emulator is connected. Device UI tests can be compiled here
 Installable optimized output: `app/build/outputs/apk/performance/app-performance.apk` (version 1.1.2 / code 4). Use the performance variant for end-user scrolling checks; the debug variant is for development.
 
 The final APK is non-debuggable, includes `assets/dexopt/baseline.prof` and `baseline.profm`, and passes APK v2 signature verification with the same signing certificate as the previous local APK. Size: 3,233,013 bytes. SHA-256: `46b0723585c7f1ae28b13cbbbcdfd552a242e716d08454cb87194550be5be377`.
+
+## Pixel 7 Pro scrolling measurement — November 24, 2026
+
+The connected Pixel 7 Pro had an Android Studio deployment with `DEBUGGABLE`, `TEST_ONLY`, deployment overlays and ART status `run-from-apk`. A cold launch followed by six swipes rendered 69 frames, with 55 janky frames (79.71%). The median frame took 44 ms and the 90th percentile took 129 ms. Later scrolling rendered 180 frames, with 61 janky frames (33.89%) and a 19 ms median. The system trace showed main-thread dex verification and compilation of Compose scrolling code during interaction. The longest main-thread frames exceeded 400 ms. After installing the optimized APK, its longest recorded main-thread frame was 78 ms.
+
+Installing `app/build/outputs/apk/performance/app-performance.apk` with `adb install -r` retained the existing library and settings. The installed APK was non-debuggable, with ART status `verify`; no forced compilation was applied. Using the same trace and six-swipe sequence, cold scrolling rendered 313 frames, with six janky frames (1.92%), a 6 ms median, a 9 ms 90th percentile and an 11 ms 95th percentile. Later scrolling rendered 325 frames with zero janky frames, a 6 ms median and a 9 ms 90th percentile. These measurements describe this phone and its existing music library.
+
+Use the **performance** build variant in Android Studio for app performance checks. Build the installable optimized APK with `:app:assemblePerformance` and use `app/build/outputs/apk/performance/app-performance.apk` for delivery. Two additional cold-launch checks were interrupted by another application's overlay and were excluded. The completed optimized trace confirms AuraPlay held input focus throughout its comparison run.
+
+## Player, lyrics, and widget follow-up — November 24, 2026
+
+- Settings → Widget styles now includes **Add to home screen**. Supported launchers show Android's pinning prompt. Other launchers display instructions for opening the widget picker. Compact, Large, and Artwork layouts use rounded playback controls and resize their artwork to keep song details readable.
+- The supplied purple play logo replaces the adaptive, square, and round launcher icons. Its transparent foreground also supplies the themed icon shape.
+- The player header opens **Audio info** with file name, location, type, bitrate, size, duration, codec, sample rate, and channel count when available. Estimated bitrates are labeled. **Speed** appears beside Equalizer, Bookmarks, and Sleep timer. Song editing remains available from the library's song menu.
+- Lyrics lookup handles null provider fields, Unicode metadata, alternate titles, and downloaded filenames. It checks embedded lyrics and sidecar LRC files, ranks online matches using artist and duration, and allows manual search or importing UTF-8 and UTF-16 lyrics files. Explicit refresh can replace imported lyrics with a successful online match. Songs without a matching source can still use imported lyrics.
+- Library list publication runs on a background scope. Artwork work is bounded, preference changes avoid unrelated library processing, and lyrics load when their view opens. The global theme applies each resolved accent directly.
