@@ -5,6 +5,22 @@ plugins {
     id("kotlin-kapt") // Add this for Room
 }
 
+val auraAdb = androidComponents.sdkComponents.adb
+val auraDeviceSerial = providers.gradleProperty("android.injected.device.serial")
+    .orElse(providers.environmentVariable("ANDROID_SERIAL"))
+
+// A shared IDE Run configuration uses this task, independently of a cached build variant.
+tasks.register<Exec>("runPerformance") {
+    group = "install"
+    description = "Install the optimized app and its profile, then open AuraPlay."
+    dependsOn("installPerformance")
+    doFirst {
+        val device = auraDeviceSerial.orNull?.let { listOf("-s", it) }.orEmpty()
+        commandLine(listOf(auraAdb.get().asFile.absolutePath) + device +
+            listOf("shell", "am", "start", "-n", "com.example.auraplay/com.example.auraplay.MainActivity"))
+    }
+}
+
 android {
     namespace = "com.example.auraplay"
     compileSdk = 36 // Updated SDK version
@@ -13,14 +29,20 @@ android {
         applicationId = "com.example.auraplay"
         minSdk = 26
         targetSdk = 36 // Updated SDK version
-        versionCode = 6
-        versionName = "1.1.4"
+        versionCode = 7
+        versionName = "1.1.5"
 
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
+        debug {
+            // Development runs must never replace the optimized, everyday app.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-dev"
+            isDefault = false
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -35,6 +57,7 @@ android {
             initWith(getByName("release"))
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
+            isDefault = true
         }
     }
     compileOptions {

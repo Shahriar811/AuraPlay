@@ -28,17 +28,26 @@ jobs:
       - name: Test, lint, and build APKs
         run: ./gradlew testDebugUnitTest lintDebug assembleDebug assemblePerformance --no-daemon
 
-      - name: Verify optimized installation files
+      - name: Verify optimized files and app isolation
         run: |
           test -s app/build/outputs/apk/performance/app-performance.apk
           test -s app/build/outputs/apk/performance/output-metadata.json
           test -s app/build/outputs/apk/performance/baselineProfiles/0/app-performance.dm
           test -s app/build/outputs/apk/performance/baselineProfiles/1/app-performance.dm
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('app/build/outputs/apk')
+          dev = json.loads((root / 'debug/output-metadata.json').read_text())
+          app = json.loads((root / 'performance/output-metadata.json').read_text())
+          assert dev['applicationId'] == 'com.example.auraplay.debug', 'Development APK must have a separate app ID'
+          assert app['applicationId'] == 'com.example.auraplay', 'Optimized APK must retain the normal app ID'
+          PY
 
-      - name: Upload APK artifact
+      - name: Upload development APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AuraPlay-Debug-APK
+          name: AuraPlay-Development-APK
           path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload optimized APK artifact

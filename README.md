@@ -167,13 +167,17 @@ com.example.auraplay/
    cd AuraPlay
    ```
 2. **Open the project** in Android Studio.
-3. **Sync Project with Gradle Files**.
-4. **Build & Run** on a physical device or emulator:
+3. **Sync Project with Gradle Files**. The default build variant is **performance**.
+4. Select **AuraPlay (optimized)** in the Run configurations, or build, install, and open it from a terminal:
    ```bash
-   ./gradlew assembleDebug
+   ./gradlew :app:runPerformance
    ```
 
-For an installable build with release optimizations, use `./gradlew assemblePerformance`. Run `./gradlew testDebugUnitTest lintDebug` for regression tests and static checks. The optimized APK is generated at `app/build/outputs/apk/performance/app-performance.apk`.
+The shared **AuraPlay (optimized)** Run configuration uses `:app:runPerformance` independently of Android Studio's cached variant selection. It installs the optimized APK and its matching compilation profile before opening the app. When choosing among devices, pass `'-Pandroid.injected.device.serial=DEVICE_ID'`.
+
+For breakpoints and development, select the **debug** variant. It installs as **AuraPlay Dev** (`com.example.auraplay.debug`) with separate app data, so Run/Debug and Apply Changes cannot replace the everyday **AuraPlay** app (`com.example.auraplay`). First-launch performance measurements should use the normal AuraPlay icon. [Android build variant application IDs](https://developer.android.com/build/build-variants#applicationId)
+
+To build the optimized files without installing, use `./gradlew assemblePerformance`. Run `./gradlew testDebugUnitTest lintDebug` for regression tests and static checks. The optimized APK is generated at `app/build/outputs/apk/performance/app-performance.apk`. CI's **AuraPlay-Development-APK** artifact contains the separate development app; **AuraPlay-Optimized-APK** contains the normal app and its installation files.
 
 Keep `output-metadata.json` and the generated `baselineProfiles/` directory with that APK. To install the local build with its compilation profile from Windows, run `./scripts/install-optimized.ps1`. The script finds ADB through PATH, Android SDK environment variables, or this checkout's `local.properties`. Supply `-AdbPath PATH_TO_ADB` when needed. Its final output reports Android's compilation state.
 
